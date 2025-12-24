@@ -1242,3 +1242,816 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.getElementById('loginEmail')?.focus();
 });
+// ============================================
+// 🔄 ФУНКЦИИ ОТМЕНЫ ЗАНЯТИЙ И ВОЗВРАТА БАЛЛОВ
+// ============================================
+
+// ОТМЕНИТЬ ТРЕНИРОВКУ И ВЕРНУТЬ БАЛЛЫ
+async function cancelTraining(trainingId) {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может отменять тренировки');
+        return;
+    }
+    
+    if (!confirm('Отменить тренировку и вернуть баллы всем записавшимся?')) {
+        return;
+    }
+    
+    try {
+        // Получаем тренировку
+        const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+        if (!trainingDoc.exists) {
+            alert('Тренировка не найдена');
+            return;
+        }
+        
+        const training = trainingDoc.data();
+        
+        // Получаем всех записавшихся
+        const registrationsSnapshot = await db.collection('registrations')
+            .where('trainingId', '==', trainingId)
+            .get();
+        
+        if (registrationsSnapshot.empty) {
+            alert('На тренировку никто не записан');
+            return;
+        }
+        
+        let refundedCount = 0;
+        
+        // Возвращаем баллы каждому участнику
+        for (const doc of registrationsSnapshot.docs) {
+            const registration = doc.data();
+            
+            // Проверяем, были ли списаны баллы
+            if (registration.charged) {
+                await db.runTransaction(async (transaction) => {
+                    // Получаем пользователя
+                    const userRef = db.collection('users').doc(registration.userId);
+                    const userDoc = await transaction.get(userRef);
+                    
+                    if (userDoc.exists) {
+                        const currentBalance = userDoc.data().balance;
+                        const newBalance = currentBalance + (training.price || 0);
+                        
+                        // Возвращаем баллы
+                        transaction.update(userRef, {
+                            balance: newBalance
+                        });
+                        
+                        // Создаем транзакцию возврата
+                        const transRef = db.collection('transactions').doc();
+                        transaction.set(transRef, {
+                            userId: registration.userId,
+                            trainingId: trainingId,
+                            amount: training.price || 0,
+                            type: 'credit',
+                            description: `Возврат за отмененную тренировку: ${training.title}`,
+                            createdBy: currentUser.uid,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        
+                        // Помечаем регистрацию как отмененную
+                        transaction.update(doc.ref, {
+                            cancelled: true,
+                            refunded: true,
+                            cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        
+                        refundedCount++;
+                    }
+                });
+            }
+        }
+        
+        // Помечаем тренировку как отмененную
+        await db.collection('trainings').doc(trainingId).update({
+            cancelled: true,
+            cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+            cancelledBy: currentUser.uid
+        });
+        
+        alert(`✅ Тренировка отменена! Возвращено баллов ${refundedCount} участникам.`);
+        
+        // Обновляем интерфейс
+        loadTrainings();
+        
+    } catch (error) {
+        alert('❌ Ошибка отмены тренировки: ' + error.message);
+    }
+}
+
+// ОТМЕНА ЗАПИСИ ПОЛЬЗОВАТЕЛЕМ (С ВОЗВРАТОМ)
+async function cancelUserRegistration(registrationId, trainingId) {
+    if (!confirm('Отменить запись и вернуть баллы?')) {
+        return;
+    }
+    
+    try {
+        // Получаем данные о регистрации и тренировке
+        const registrationDoc = await db.collection('registrations').doc(registrationId).get();
+        const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+        
+        if (!registrationDoc.exists || !trainingDoc.exists) {
+            alert('Запись не найдена');
+            return;
+        }
+        
+        const registration = registrationDoc.data();
+        const training = trainingDoc.data();
+        
+        // Проверяем, что это запись текущего пользователя
+        if (registration.userId !== currentUser.uid) {
+            alert('Вы можете отменять только свои записи');
+            return;
+        }
+        
+        // Проверяем, можно ли отменить (не раньше чем за 2 часа до тренировки)
+        const trainingDate = training.date.toDate();
+        const now = new Date();
+        const hoursBefore = (trainingDate - now) / (1000 * 60 * 60);
+        
+        if (hoursBefore < 2) {
+            alert('Отмена возможна не позднее чем за 2 часа до тренировки');
+            return;
+        }
+        
+        // Проверяем, не было ли уже присутствия
+        if (registration.attended) {
+            alert('Нельзя отменить посещенную тренировку');
+            return;
+        }
+        
+        // Возвращаем баллы
+        await db.runTransaction(async (transaction) => {
+            const userRef = db.collection('users').doc(currentUser.uid);
+            const userDoc = await transaction.get(userRef);
+            
+            if (userDoc.exists) {
+                const currentBalance = userDoc.data().balance;
+                const newBalance = currentBalance + (training.price || 0);
+                
+                // Возвращаем баллы
+                transaction.update(userRef, {
+                    balance: newBalance
+                });
+                
+                // Создаем транзакцию возврата
+                const transRef = db.collection('transactions').doc();
+                transaction.set(transRef, {
+                    userId: currentUser.uid,
+                    trainingId: trainingId,
+                    amount: training.price || 0,
+                    type: 'credit',
+                    description: `Возврат за отмену записи: ${training.title}`,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Помечаем регистрацию как отмененную
+                transaction.update(registrationDoc.ref, {
+                    cancelled: true,
+                    refunded: true,
+                    cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        });
+        
+        alert('✅ Запись отменена! Баллы возвращены на ваш счет.');
+        
+        // Обновляем интерфейс
+        loadUserData();
+        loadMyBookings();
+        
+    } catch (error) {
+        alert('❌ Ошибка отмены записи: ' + error.message);
+    }
+}
+
+// ============================================
+// 📊 ЭКСПОРТ В EXCEL ДЛЯ ТРЕНЕРА
+// ============================================
+
+// ВЫГРУЗКА ДАННЫХ ПО ПОСЕЩЕНИЯМ
+async function exportAttendanceToExcel() {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может выгружать данные');
+        return;
+    }
+    
+    try {
+        // Получаем все тренировки тренера
+        const trainingsSnapshot = await db.collection('trainings')
+            .where('trainerId', '==', currentUser.uid)
+            .get();
+        
+        if (trainingsSnapshot.empty) {
+            alert('У вас нет тренировок');
+            return;
+        }
+        
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        // Заголовки для CSV
+        csvContent += "Тренировка;Дата;Цена;Участник;Email;Посещение;Оплачено;Баллы списано;Оценка;Комментарий\r\n";
+        
+        let totalRows = 0;
+        
+        // Собираем данные по каждой тренировке
+        for (const trainingDoc of trainingsSnapshot.docs) {
+            const training = trainingDoc.data();
+            const trainingDate = training.date.toDate();
+            
+            // Получаем записи на эту тренировку
+            const registrationsSnapshot = await db.collection('registrations')
+                .where('trainingId', '==', trainingDoc.id)
+                .get();
+            
+            // Получаем оценки для этой тренировки
+            const ratingsSnapshot = await db.collection('ratings')
+                .where('trainingId', '==', trainingDoc.id)
+                .get();
+            
+            const ratings = {};
+            ratingsSnapshot.forEach(doc => {
+                const rating = doc.data();
+                ratings[rating.userId] = rating;
+            });
+            
+            // Обрабатываем каждую регистрацию
+            for (const regDoc of registrationsSnapshot.docs) {
+                const registration = regDoc.data();
+                
+                // Получаем данные пользователя
+                const userDoc = await db.collection('users').doc(registration.userId).get();
+                const user = userDoc.exists ? userDoc.data() : {};
+                
+                // Получаем оценку пользователя
+                const userRating = ratings[registration.userId];
+                
+                // Формируем строку данных
+                const row = [
+                    `"${training.title || ''}"`,
+                    trainingDate.toLocaleDateString(),
+                    training.price || 0,
+                    `"${user.name || user.email || 'Неизвестный'}"`,
+                    user.email || '',
+                    registration.attended ? 'Да' : 'Нет',
+                    registration.charged ? 'Да' : 'Нет',
+                    registration.charged ? training.price || 0 : 0,
+                    userRating ? userRating.score : '',
+                    userRating ? `"${userRating.comment || ''}"` : ''
+                ].join(';');
+                
+                csvContent += row + "\r\n";
+                totalRows++;
+            }
+        }
+        
+        if (totalRows === 0) {
+            alert('Нет данных для экспорта');
+            return;
+        }
+        
+        // Создаем и скачиваем файл
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `attendance_data_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(`✅ Данные экспортированы! Строк: ${totalRows}`);
+        
+    } catch (error) {
+        alert('❌ Ошибка экспорта: ' + error.message);
+    }
+}
+
+// ВЫГРУЗКА ФИНАНСОВЫХ ДАННЫХ
+async function exportFinancialToExcel() {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может выгружать финансовые данные');
+        return;
+    }
+    
+    try {
+        // Получаем всех пользователей
+        const usersSnapshot = await db.collection('users').get();
+        
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Пользователь;Email;Текущий баланс;Всего начислено;Всего списано;Кол-во посещений;Сумма посещений\r\n";
+        
+        let totalRows = 0;
+        
+        for (const userDoc of usersSnapshot.docs) {
+            const user = userDoc.data();
+            
+            // Получаем транзакции пользователя
+            const transactionsSnapshot = await db.collection('transactions')
+                .where('userId', '==', userDoc.id)
+                .get();
+            
+            let totalCredit = 0;
+            let totalDebit = 0;
+            
+            transactionsSnapshot.forEach(doc => {
+                const trans = doc.data();
+                if (trans.type === 'credit') {
+                    totalCredit += trans.amount;
+                } else if (trans.type === 'debit') {
+                    totalDebit += trans.amount;
+                }
+            });
+            
+            // Получаем посещения пользователя
+            const registrationsSnapshot = await db.collection('registrations')
+                .where('userId', '==', userDoc.id)
+                .where('attended', '==', true)
+                .get();
+            
+            let attendanceSum = 0;
+            
+            for (const regDoc of registrationsSnapshot.docs) {
+                const registration = regDoc.data();
+                const trainingDoc = await db.collection('trainings').doc(registration.trainingId).get();
+                
+                if (trainingDoc.exists) {
+                    const training = trainingDoc.data();
+                    attendanceSum += training.price || 0;
+                }
+            }
+            
+            // Формируем строку
+            const row = [
+                `"${user.name || user.email || 'Неизвестный'}"`,
+                user.email || '',
+                user.balance || 0,
+                totalCredit,
+                totalDebit,
+                registrationsSnapshot.size,
+                attendanceSum
+            ].join(';');
+            
+            csvContent += row + "\r\n";
+            totalRows++;
+        }
+        
+        if (totalRows === 0) {
+            alert('Нет данных для экспорта');
+            return;
+        }
+        
+        // Скачиваем файл
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `financial_data_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(`✅ Финансовые данные экспортированы! Пользователей: ${totalRows}`);
+        
+    } catch (error) {
+        alert('❌ Ошибка экспорта: ' + error.message);
+    }
+}
+
+// ============================================
+// 🎨 ОБНОВЛЕННЫЙ ИНТЕРФЕЙС ДЛЯ ОТМЕНЫ
+// ============================================
+
+// Дополните функцию loadTrainings() - добавьте кнопку отмены для тренера:
+// В карточке тренировки для тренера добавьте:
+
+async function loadTrainings() {
+    try {
+        const querySnapshot = await db.collection('trainings')
+            .where('date', '>=', firebase.firestore.Timestamp.now())
+            .orderBy('date')
+            .limit(20)
+            .get();
+        
+        const container = document.getElementById('trainingsList');
+        container.innerHTML = '';
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<p class="text-center">Нет тренировок</p>';
+            return;
+        }
+        
+        querySnapshot.forEach(doc => {
+            const training = doc.data();
+            const date = training.date.toDate();
+            const isCancelled = training.cancelled;
+            
+            const card = document.createElement('div');
+            card.className = 'training-card';
+            card.style.borderLeft = isCancelled ? '4px solid #dc3545' : '4px solid #667eea';
+            card.style.opacity = isCancelled ? '0.7' : '1';
+            
+            card.innerHTML = `
+                ${isCancelled ? '<div style="background: #dc3545; color: white; padding: 5px; border-radius: 5px; margin-bottom: 10px; text-align: center;">❌ ОТМЕНЕНА</div>' : ''}
+                <h3>${training.title || 'Без названия'}</h3>
+                <div class="training-meta">
+                    <span><i class="far fa-calendar"></i> ${date.toLocaleDateString()}</span>
+                    <span><i class="far fa-clock"></i> ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span><i class="fas fa-coins"></i> ${training.price || 0} баллов</span>
+                </div>
+                ${training.description ? `<p>${training.description}</p>` : ''}
+                ${training.trainerName ? `<p><small><i class="fas fa-user-tie"></i> ${training.trainerName}</small></p>` : ''}
+                
+                <div class="mt-2">
+                    ${userData && userData.role === 'trainer' ? `
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="editTraining('${doc.id}')" class="btn-secondary" style="flex: 1;">
+                                <i class="fas fa-edit"></i> Редактировать
+                            </button>
+                            ${!isCancelled ? `
+                                <button onclick="cancelTraining('${doc.id}')" class="btn-danger" style="flex: 1; background: #dc3545;">
+                                    <i class="fas fa-ban"></i> Отменить
+                                </button>
+                            ` : ''}
+                        </div>
+                    ` : `
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="openRegisterModal('${doc.id}', ${training.price || 0}, '${training.title}')" 
+                                    class="btn-primary" style="flex: 1;"
+                                    ${(userData && userData.balance < (training.price || 0)) || isCancelled ? 'disabled' : ''}>
+                                <i class="fas fa-calendar-plus"></i> ${isCancelled ? 'Отменена' : 'Записаться'}
+                            </button>
+                            ${isCancelled ? '' : `
+                                <button onclick="viewTrainingDetails('${doc.id}')" class="btn-secondary" style="flex: 1;">
+                                    <i class="fas fa-info-circle"></i> Подробнее
+                                </button>
+                            `}
+                        </div>
+                    `}
+                </div>
+            `;
+            
+            container.appendChild(card);
+        });
+    } catch (error) {
+        console.error('Ошибка:', error);
+        document.getElementById('trainingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
+    }
+}
+
+// ============================================
+// 📋 ОБНОВЛЕННЫЙ ИНТЕРФЕЙС МОИХ ЗАПИСЕЙ
+// ============================================
+
+// Обновите функцию loadMyBookings() - добавьте кнопку отмены для пользователя:
+
+async function loadMyBookings() {
+    try {
+        const querySnapshot = await db.collection('registrations')
+            .where('userId', '==', currentUser.uid)
+            .get();
+        
+        const container = document.getElementById('myBookingsList');
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<p class="text-center">У вас нет записей на тренировки</p>';
+            return;
+        }
+        
+        const registrations = [];
+        querySnapshot.forEach(doc => {
+            const reg = doc.data();
+            reg.id = doc.id;
+            registrations.push(reg);
+        });
+        
+        const trainingPromises = registrations.map(reg => 
+            db.collection('trainings').doc(reg.trainingId).get()
+        );
+        
+        const trainingSnapshots = await Promise.all(trainingPromises);
+        
+        let html = `
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f8f9fa;">
+                        <th style="padding: 12px; text-align: left;">Тренировка</th>
+                        <th style="padding: 12px; text-align: left;">Дата</th>
+                        <th style="padding: 12px; text-align: left;">Статус</th>
+                        <th style="padding: 12px; text-align: left;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        registrations.forEach((reg, index) => {
+            const training = trainingSnapshots[index].exists ? trainingSnapshots[index].data() : {};
+            const date = training.date?.toDate() || new Date();
+            const isTrainingCancelled = training.cancelled;
+            const isRegistrationCancelled = reg.cancelled;
+            
+            // Определяем статус
+            let status = '';
+            let statusColor = '';
+            
+            if (isTrainingCancelled) {
+                status = 'Тренировка отменена';
+                statusColor = '#dc3545';
+            } else if (isRegistrationCancelled) {
+                status = 'Вы отменили запись';
+                statusColor = '#ffc107';
+            } else if (reg.attended) {
+                status = 'Посещено';
+                statusColor = '#28a745';
+            } else if (reg.charged) {
+                status = 'Записан';
+                statusColor = '#17a2b8';
+            } else {
+                status = 'Ожидание';
+                statusColor = '#6c757d';
+            }
+            
+            // Определяем доступные действия
+            let actions = '';
+            const now = new Date();
+            const trainingDate = training.date?.toDate() || new Date();
+            const hoursBefore = (trainingDate - now) / (1000 * 60 * 60);
+            const canCancel = !isTrainingCancelled && !isRegistrationCancelled && !reg.attended && hoursBefore >= 2;
+            
+            if (canCancel) {
+                actions = `
+                    <button onclick="cancelUserRegistration('${reg.id}', '${reg.trainingId}')" 
+                            style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">
+                        <i class="fas fa-ban"></i> Отменить
+                    </button>
+                `;
+            } else if (isTrainingCancelled && reg.charged && !reg.refunded) {
+                actions = `
+                    <button onclick="requestRefund('${reg.id}', '${reg.trainingId}')" 
+                            style="background: #ffc107; color: black; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">
+                        <i class="fas fa-coins"></i> Запросить возврат
+                    </button>
+                `;
+            } else {
+                actions = '<span style="color: #6c757d;">-</span>';
+            }
+            
+            html += `
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                        <div><strong>${training.title || 'Неизвестно'}</strong></div>
+                        <div style="font-size: 0.9em; color: #666;">${training.price || 0} баллов</div>
+                    </td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                        ${date.toLocaleDateString()}<br>
+                        <small>${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</small>
+                    </td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                        <span style="padding: 4px 8px; border-radius: 12px; font-size: 0.85em; font-weight: 600; background: ${statusColor}; color: white;">
+                            ${status}
+                        </span>
+                    </td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                        ${actions}
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Ошибка:', error);
+        document.getElementById('myBookingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
+    }
+}
+
+// ============================================
+// 📥 ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================
+
+// ЗАПРОС ВОЗВРАТА (для пользователя)
+async function requestRefund(registrationId, trainingId) {
+    if (!confirm('Отправить запрос на возврат баллов тренеру?')) {
+        return;
+    }
+    
+    try {
+        // Создаем уведомление для тренера
+        const notificationRef = db.collection('notifications').doc();
+        await notificationRef.set({
+            type: 'refund_request',
+            userId: currentUser.uid,
+            registrationId: registrationId,
+            trainingId: trainingId,
+            message: 'Пользователь запросил возврат баллов за отмененную тренировку',
+            status: 'pending',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            read: false
+        });
+        
+        alert('✅ Запрос на возврат отправлен тренеру');
+        
+    } catch (error) {
+        alert('❌ Ошибка отправки запроса: ' + error.message);
+    }
+}
+
+// ПРОСМОТР ДЕТАЛЕЙ ТРЕНИРОВКИ
+async function viewTrainingDetails(trainingId) {
+    try {
+        const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+        if (!trainingDoc.exists) {
+            alert('Тренировка не найдена');
+            return;
+        }
+        
+        const training = trainingDoc.data();
+        const date = training.date.toDate();
+        
+        // Получаем количество записавшихся
+        const registrationsSnapshot = await db.collection('registrations')
+            .where('trainingId', '==', trainingId)
+            .get();
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        modal.innerHTML = `
+            <div class="modal" style="background: white; padding: 20px; border-radius: 15px; max-width: 500px; width: 90%;">
+                <h3><i class="fas fa-info-circle"></i> Детали тренировки</h3>
+                
+                <div style="margin-top: 15px;">
+                    <h4>${training.title || 'Без названия'}</h4>
+                    <p><strong>Дата:</strong> ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                    <p><strong>Стоимость:</strong> ${training.price || 0} баллов</p>
+                    <p><strong>Максимум участников:</strong> ${training.maxParticipants || 'Не ограничено'}</p>
+                    <p><strong>Записано:</strong> ${registrationsSnapshot.size} человек</p>
+                    <p><strong>Тренер:</strong> ${training.trainerName || 'Не указан'}</p>
+                </div>
+                
+                ${training.description ? `
+                    <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                        <strong>Описание:</strong>
+                        <p>${training.description}</p>
+                    </div>
+                ` : ''}
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="this.parentElement.parentElement.remove()" style="
+                        background: #667eea;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        cursor: pointer;
+                    ">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        alert('Ошибка загрузки деталей: ' + error.message);
+    }
+}
+
+// ============================================
+// 📊 ДОПОЛНИТЕЛЬНЫЕ КНОПКИ ДЛЯ ТРЕНЕРА
+// ============================================
+
+// Добавьте в панель тренера новые кнопки экспорта:
+
+async function loadTrainerStats() {
+    if (userData.role !== 'trainer') return;
+    
+    try {
+        const trainingsSnapshot = await db.collection('trainings')
+            .where('trainerId', '==', currentUser.uid)
+            .get();
+        
+        let totalParticipants = 0;
+        let totalRevenue = 0;
+        let upcomingTrainings = 0;
+        let pastTrainings = 0;
+        let cancelledTrainings = 0;
+        
+        const now = firebase.firestore.Timestamp.now();
+        
+        for (const doc of trainingsSnapshot.docs) {
+            const training = doc.data();
+            const isPast = training.date.toDate() < now.toDate();
+            const isCancelled = training.cancelled;
+            
+            if (isCancelled) {
+                cancelledTrainings++;
+            } else if (isPast) {
+                pastTrainings++;
+            } else {
+                upcomingTrainings++;
+            }
+            
+            if (!isCancelled) {
+                const registrationsSnapshot = await db.collection('registrations')
+                    .where('trainingId', '==', doc.id)
+                    .get();
+                
+                totalParticipants += registrationsSnapshot.size;
+                
+                registrationsSnapshot.forEach(regDoc => {
+                    if (regDoc.data().charged) {
+                        totalRevenue += training.price || 0;
+                    }
+                });
+            }
+        }
+        
+        const statsDiv = document.getElementById('trainerStats');
+        statsDiv.innerHTML = `
+            <h3><i class="fas fa-chart-line"></i> Статистика</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: bold; color: #1976d2;">${trainingsSnapshot.size}</div>
+                    <div>Всего тренировок</div>
+                </div>
+                <div style="background: #f3e5f5; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: bold; color: #7b1fa2;">${upcomingTrainings}</div>
+                    <div>Предстоящих</div>
+                </div>
+                <div style="background: #e8f5e9; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: bold; color: #388e3c;">${pastTrainings}</div>
+                    <div>Проведенных</div>
+                </div>
+                <div style="background: #fff3e0; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: bold; color: #f57c00;">${totalParticipants}</div>
+                    <div>Участников</div>
+                </div>
+                <div style="background: #fce4ec; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: bold; color: #c2185b;">${totalRevenue}</div>
+                    <div>Баллов списано</div>
+                </div>
+                <div style="background: #f8d7da; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: bold; color: #721c24;">${cancelledTrainings}</div>
+                    <div>Отменено</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h4><i class="fas fa-file-export"></i> Экспорт данных</h4>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button onclick="exportAttendanceToExcel()" style="
+                        background: #28a745;
+                        color: white;
+                        border: none;
+                        padding: 12px 20px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        flex: 1;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
+                    ">
+                        <i class="fas fa-users"></i> Посещения (CSV)
+                    </button>
+                    
+                    <button onclick="exportFinancialToExcel()" style="
+                        background: #17a2b8;
+                        color: white;
+                        border: none;
+                        padding: 12px 20px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        flex: 1;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
+                    ">
+                        <i class="fas fa-coins"></i> Финансы (CSV)
+                    </button>
+                </div>
+                <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                    <i class="fas fa-info-circle"></i> Файлы CSV можно открыть в Excel
+                </p>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Ошибка:', error);
+    }
+}
