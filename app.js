@@ -637,160 +637,143 @@ async function saveAttendance() {
         return;
     }
     
-    const checkboxes = document.querySelectorAll('#attendanceUsers input[type="checkbox"]');
-    console.log('Найдено флажков для обработки:', checkboxes.length);
+    // Получаем данные о тренировке ОДИН раз
+    const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+    if (!trainingDoc.exists) {
+        alert('❌ Тренировка не найдена');
+        return;
+    }
+    
+    const training = trainingDoc.data();
+    const price = training.price || 0;
+    const trainerId = training.trainerId;
+    
+    const checkboxes = document.querySelectorAll('#attendanceUsers input[type="checkbox"]:checked');
+    console.log('Отмечено для обработки:', checkboxes.length);
     
     if (checkboxes.length === 0) {
-        alert('⚠️ Нет участников для отметки');
+        alert('⚠️ Не выбрано ни одного участника');
         return;
     }
     
     let updated = 0;
     let charged = 0;
     
-    try {
-        // Сначала получаем данные о тренировке один раз
-        const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+    // Обрабатываем каждого отмеченного участника
+    for (const checkbox of checkboxes) {
+        const registrationId = checkbox.dataset.registration;
+        const userId = checkbox.dataset.user;
         
-        if (!trainingDoc.exists) {
-            alert('❌ Тренировка не найдена');
-            return;
-        }
-        
-        const training = trainingDoc.data();
-        const price = training.price || 0;
-        const trainerId = training.trainerId;
-        
-        console.log('Данные тренировки:', { title: training.title, price, trainerId });
-        
-        // Обрабатываем каждого участника
-        for (const checkbox of checkboxes) {
-            const registrationId = checkbox.dataset.registration;
-            const userId = checkbox.dataset.user;
-            const attended = checkbox.checked;
-            
-            console.log(`Обработка: registrationId=${registrationId}, userId=${userId}, attended=${attended}`);
-            
-            // 1. Обновляем статус присутствия
+        try {
+            // 1. Обновляем регистрацию (отмечаем присутствие)
             await db.collection('registrations').doc(registrationId).update({
-                attended: attended,
-                attendedAt: attended ? firebase.firestore.FieldValue.serverTimestamp() : null
+                attended: true,
+                attendedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
-            
             updated++;
             
-            // 2. Если присутствие отмечено - списываем баллы и начисляем тренеру
-            if (attended) {
-                try {
-                    await db.runTransaction(async (transaction) => {
-                        // Проверяем регистрацию еще раз внутри транзакции
-                        const registrationRef = db.collection('registrations').doc(registrationId);
-                        const registrationDoc = await transaction.get(registrationRef);
-                        const registration = registrationDoc.data();
-                        
-                        // Если уже списали - пропускаем
-                        if (registration.charged) {
-                            console.log(`Баллы уже списаны для пользователя ${userId}`);
-                            return;
-                        }
-                        
-                        // Проверяем пользователя
-                        const userRef = db.collection('users').doc(userId);
-                        const userDoc = await transaction.get(userRef);
-                        
-                        if (!userDoc.exists) {
-                            throw new Error(`Пользователь ${userId} не найден`);
-                        }
-                        
-                        const user = userDoc.data();
-                        const userBalance = user.balance || 0;
-                        
-                        // Проверяем достаточно ли баллов
-                        if (userBalance < price) {
-                            throw new Error(`У пользователя ${user.name || user.email} недостаточно баллов: ${userBalance} < ${price}`);
-                        }
-                        
-                        // 2.1 СПИСАНИЕ У ПОЛЬЗОВАТЕЛЯ
-                        transaction.update(userRef, {
-                            balance: userBalance - price
-                        });
-                        
-                        // 2.2 НАЧИСЛЕНИЕ ТРЕНЕРУ
-                        if (trainerId) {
-                            const trainerRef = db.collection('users').doc(trainerId);
-                            const trainerDoc = await transaction.get(trainerRef);
-                            
-                            if (trainerDoc.exists) {
-                                const trainerBalance = trainerDoc.data().balance || 0;
-                                transaction.update(trainerRef, {
-                                    balance: trainerBalance + price
-                                });
-                                
-                                // Транзакция для тренера
-                                const trainerTransRef = db.collection('transactions').doc();
-                                transaction.set(trainerTransRef, {
-                                    userId: trainerId,
-                                    trainingId: trainingId,
-                                    amount: price,
-                                    type: 'credit',
-                                    description: `Оплата за посещение: ${training.title}`,
-                                    createdBy: currentUser.uid,
-                                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                                });
-                                
-                                console.log(`Тренеру ${trainerId} начислено ${price} баллов`);
-                            }
-                        }
-                        
-                        // 2.3 ТРАНЗАКЦИЯ ДЛЯ ПОЛЬЗОВАТЕЛЯ
-                        const userTransRef = db.collection('transactions').doc();
-                        transaction.set(userTransRef, {
-                            userId: userId,
-                            trainingId: trainingId,
-                            amount: price,
-                            type: 'debit',
-                            description: `Списание за посещение: ${training.title}`,
-                            createdBy: currentUser.uid,
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        
-                        // 2.4 ОТМЕЧАЕМ, ЧТО СПИСАНИЕ ПРОИЗОШЛО
-                        transaction.update(registrationRef, {
-                            charged: true,
-                            chargedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        
-                        charged++;
-                        console.log(`Списано ${price} баллов у пользователя ${userId}, начислено тренеру`);
-                    });
-                } catch (txError) {
-                    console.error(`Ошибка транзакции для пользователя ${userId}:`, txError);
-                    // Продолжаем обработку других пользователей
-                }
+            // 2. Проверяем, не списаны ли уже баллы
+            const regDoc = await db.collection('registrations').doc(registrationId).get();
+            const registration = regDoc.data();
+            
+            if (registration.charged) {
+                console.log(`Баллы уже списаны для пользователя ${userId}`);
+                continue; // Пропускаем списание
             }
+            
+            // 3. Выполняем транзакцию списания баллов
+            await db.runTransaction(async (transaction) => {
+                // ВСЕ ЧТЕНИЯ сначала
+                const userRef = db.collection('users').doc(userId);
+                const userDoc = await transaction.get(userRef);
+                
+                const trainerRef = trainerId ? db.collection('users').doc(trainerId) : null;
+                const trainerDoc = trainerId ? await transaction.get(trainerRef) : null;
+                
+                // Проверка данных
+                if (!userDoc.exists) {
+                    throw new Error(`Пользователь ${userId} не найден`);
+                }
+                
+                const user = userDoc.data();
+                const userBalance = user.balance || 0;
+                
+                // Проверяем достаточно ли баллов
+                if (userBalance < price) {
+                    throw new Error(`Недостаточно баллов: ${userBalance} < ${price}`);
+                }
+                
+                // ВСЕ ЗАПИСИ после чтений
+                // 1. Списание у пользователя
+                transaction.update(userRef, {
+                    balance: userBalance - price
+                });
+                
+                // 2. Начисление тренеру (если есть)
+                if (trainerId && trainerDoc && trainerDoc.exists) {
+                    const trainerBalance = trainerDoc.data().balance || 0;
+                    transaction.update(trainerRef, {
+                        balance: trainerBalance + price
+                    });
+                    
+                    // Транзакция для тренера
+                    const trainerTransRef = db.collection('transactions').doc();
+                    transaction.set(trainerTransRef, {
+                        userId: trainerId,
+                        trainingId: trainingId,
+                        amount: price,
+                        type: 'credit',
+                        description: `Оплата за посещение: ${training.title}`,
+                        createdBy: currentUser.uid,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                
+                // 3. Транзакция для пользователя
+                const userTransRef = db.collection('transactions').doc();
+                transaction.set(userTransRef, {
+                    userId: userId,
+                    trainingId: trainingId,
+                    amount: price,
+                    type: 'debit',
+                    description: `Списание за посещение: ${training.title}`,
+                    createdBy: currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // 4. Отмечаем, что списание произошло
+                transaction.update(db.collection('registrations').doc(registrationId), {
+                    charged: true,
+                    chargedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            
+            charged++;
+            console.log(`✅ Списано ${price} баллов у пользователя ${userId}`);
+            
+        } catch (error) {
+            console.error(`❌ Ошибка обработки пользователя ${userId}:`, error);
+            // Продолжаем с другими пользователями
         }
-        
-        // Итоговое сообщение
-        let message = `✅ Отмечено присутствие: ${updated} участников`;
-        if (charged > 0) {
-            message += `\n💰 Списано баллов: ${charged} на сумму ${charged * price}`;
+    }
+    
+    // Итоговое сообщение
+    let message = `✅ Отмечено присутствие: ${updated} участников`;
+    if (charged > 0) {
+        message += `\n💰 Списано баллов: ${charged} на сумму ${charged * price}`;
+        if (trainerId) {
             message += `\n🏆 Тренер получил: ${charged * price} баллов`;
         }
-        
-        alert(message);
-        closeModal('attendanceModal');
-        
-        // Обновляем данные если нужно
-        if (userData && userData.role === 'trainer') {
-            loadUserData(); // Обновляем баланс тренера
-        }
-        
-    } catch (error) {
-        console.error('Общая ошибка в saveAttendance:', error);
-        alert(`❌ Ошибка сохранения: ${error.message}`);
+    }
+    
+    alert(message);
+    closeModal('attendanceModal');
+    
+    // Обновляем данные если нужно
+    if (userData && userData.role === 'trainer') {
+        await loadUserData(); // Обновляем баланс тренера
     }
 }
-
 async function openAdjustBalanceModal() {
     if (userData.role !== 'trainer') return alert('Только тренер');
     
@@ -1597,6 +1580,7 @@ async function cancelTraining(trainingId) {
         }
         
         const training = trainingDoc.data();
+        const trainingPrice = training.price || 0;
         
         // Получаем всех записавшихся
         const registrationsSnapshot = await db.collection('registrations')
@@ -1615,43 +1599,52 @@ async function cancelTraining(trainingId) {
             const registration = doc.data();
             
             // Проверяем, были ли списаны баллы
-            if (registration.charged) {
-                await db.runTransaction(async (transaction) => {
-                    // Получаем пользователя
-                    const userRef = db.collection('users').doc(registration.userId);
-                    const userDoc = await transaction.get(userRef);
-                    
-                    if (userDoc.exists) {
-                        const currentBalance = userDoc.data().balance;
-                        const newBalance = currentBalance + (training.price || 0);
+            if (registration.charged && !registration.refunded) {
+                try {
+                    await db.runTransaction(async (transaction) => {
+                        // ВСЕ ЧТЕНИЯ сначала
+                        const userRef = db.collection('users').doc(registration.userId);
+                        const userDoc = await transaction.get(userRef);
                         
-                        // Возвращаем баллы
+                        if (!userDoc.exists) {
+                            throw new Error('Пользователь не найден');
+                        }
+                        
+                        const currentBalance = userDoc.data().balance;
+                        const newBalance = currentBalance + trainingPrice;
+                        
+                        // ВСЕ ЗАПИСИ после чтений
+                        // 1. Возвращаем баллы
                         transaction.update(userRef, {
                             balance: newBalance
                         });
                         
-                        // Создаем транзакцию возврата
+                        // 2. Создаем транзакцию возврата
                         const transRef = db.collection('transactions').doc();
                         transaction.set(transRef, {
                             userId: registration.userId,
                             trainingId: trainingId,
-                            amount: training.price || 0,
+                            amount: trainingPrice,
                             type: 'credit',
                             description: `Возврат за отмененную тренировку: ${training.title}`,
                             createdBy: currentUser.uid,
                             createdAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
                         
-                        // Помечаем регистрацию как отмененную
+                        // 3. Помечаем регистрацию как отмененную
                         transaction.update(doc.ref, {
                             cancelled: true,
                             refunded: true,
                             cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
-                        
-                        refundedCount++;
-                    }
-                });
+                    });
+                    
+                    refundedCount++;
+                    console.log(`✅ Возвращено ${trainingPrice} баллов пользователю ${registration.userId}`);
+                    
+                } catch (error) {
+                    console.error(`❌ Ошибка возврата для пользователя ${registration.userId}:`, error);
+                }
             }
         }
         
@@ -1662,7 +1655,11 @@ async function cancelTraining(trainingId) {
             cancelledBy: currentUser.uid
         });
         
-        alert(`✅ Тренировка отменена! Возвращено баллов ${refundedCount} участникам.`);
+        if (refundedCount > 0) {
+            alert(`✅ Тренировка отменена! Возвращено баллов ${refundedCount} участникам.`);
+        } else {
+            alert('✅ Тренировка отменена (баллы не возвращались).');
+        }
         
         // Обновляем интерфейс
         loadTrainings();
@@ -1671,7 +1668,6 @@ async function cancelTraining(trainingId) {
         alert('❌ Ошибка отмены тренировки: ' + error.message);
     }
 }
-
 // ОТМЕНА ЗАПИСИ ПОЛЬЗОВАТЕЛЕМ (С ВОЗВРАТОМ)
 async function cancelUserRegistration(registrationId, trainingId) {
     if (!confirm('Отменить запись и вернуть баллы?')) {
@@ -1679,7 +1675,7 @@ async function cancelUserRegistration(registrationId, trainingId) {
     }
     
     try {
-        // Получаем данные о регистрации и тренировке
+        // Получаем данные о регистрации и тренировке ВНЕ транзакции
         const registrationDoc = await db.collection('registrations').doc(registrationId).get();
         const trainingDoc = await db.collection('trainings').doc(trainingId).get();
         
@@ -1697,7 +1693,17 @@ async function cancelUserRegistration(registrationId, trainingId) {
             return;
         }
         
-        // Проверяем, можно ли отменить (не раньше чем за 2 часа до тренировки)
+        // Проверяем, можно ли отменить
+        if (registration.attended) {
+            alert('Нельзя отменить посещенную тренировку');
+            return;
+        }
+        
+        if (registration.cancelled) {
+            alert('Запись уже отменена');
+            return;
+        }
+        
         const trainingDate = training.date.toDate();
         const now = new Date();
         const hoursBefore = (trainingDate - now) / (1000 * 60 * 60);
@@ -1707,57 +1713,55 @@ async function cancelUserRegistration(registrationId, trainingId) {
             return;
         }
         
-        // Проверяем, не было ли уже присутствия
-        if (registration.attended) {
-            alert('Нельзя отменить посещенную тренировку');
-            return;
-        }
-        
-        // Возвращаем баллы
+        // Выполняем транзакцию возврата
         await db.runTransaction(async (transaction) => {
+            // ВСЕ ЧТЕНИЯ сначала
             const userRef = db.collection('users').doc(currentUser.uid);
             const userDoc = await transaction.get(userRef);
             
-            if (userDoc.exists) {
-                const currentBalance = userDoc.data().balance;
-                const newBalance = currentBalance + (training.price || 0);
-                
-                // Возвращаем баллы
-                transaction.update(userRef, {
-                    balance: newBalance
-                });
-                
-                // Создаем транзакцию возврата
-                const transRef = db.collection('transactions').doc();
-                transaction.set(transRef, {
-                    userId: currentUser.uid,
-                    trainingId: trainingId,
-                    amount: training.price || 0,
-                    type: 'credit',
-                    description: `Возврат за отмену записи: ${training.title}`,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                // Помечаем регистрацию как отмененную
-                transaction.update(registrationDoc.ref, {
-                    cancelled: true,
-                    refunded: true,
-                    cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+            if (!userDoc.exists) {
+                throw new Error('Пользователь не найден');
             }
+            
+            const currentBalance = userDoc.data().balance;
+            const trainingPrice = training.price || 0;
+            const newBalance = currentBalance + trainingPrice;
+            
+            // ВСЕ ЗАПИСИ после чтений
+            // 1. Возвращаем баллы
+            transaction.update(userRef, {
+                balance: newBalance
+            });
+            
+            // 2. Создаем транзакцию возврата
+            const transRef = db.collection('transactions').doc();
+            transaction.set(transRef, {
+                userId: currentUser.uid,
+                trainingId: trainingId,
+                amount: trainingPrice,
+                type: 'credit',
+                description: `Возврат за отмену записи: ${training.title}`,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // 3. Помечаем регистрацию как отмененную
+            transaction.update(registrationDoc.ref, {
+                cancelled: true,
+                refunded: true,
+                cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
         });
         
         alert('✅ Запись отменена! Баллы возвращены на ваш счет.');
         
         // Обновляем интерфейс
-        loadUserData();
+        await loadUserData();
         loadMyBookings();
         
     } catch (error) {
         alert('❌ Ошибка отмены записи: ' + error.message);
     }
 }
-
 // ============================================
 // 📊 ЭКСПОРТ В EXCEL ДЛЯ ТРЕНЕРА
 // ============================================
