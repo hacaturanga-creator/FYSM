@@ -686,7 +686,7 @@ async function saveBalanceAdjustment() {
     
     // 1. БЕЗОПАСНОЕ получение элементов с проверкой
     const userSelect = document.getElementById('balanceUser');
-    const amountInput = document.getElementById('balanceAmount');
+    const amountInput = document.getElementById('balanceAdjustAmount');
     const reasonInput = document.getElementById('balanceReason');
     
     // Проверка, найдены ли элементы на странице
