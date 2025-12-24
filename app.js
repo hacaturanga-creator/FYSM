@@ -1,8 +1,7 @@
 // ============================================
-// FITBOOK - ПОЛНОЕ ПРИЛОЖЕНИЕ ДЛЯ ЗАПИСИ НА ТРЕНИРОВКИ
+// FITBOOK - ИСПРАВЛЕННОЕ ПРИЛОЖЕНИЕ
 // ============================================
 
-// КОНФИГУРАЦИЯ FIREBASE
 const firebaseConfig = {
     apiKey: "AIzaSyD5gplXXpP69H0f0WDQehy4jLOOTnw2rZQ",
     authDomain: "fysm-2d26a.firebaseapp.com",
@@ -12,12 +11,10 @@ const firebaseConfig = {
     appId: "1:1013209595020:web:5057a63c94dbf29aa4cfa9"
 };
 
-// ИНИЦИАЛИЗАЦИЯ
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 let currentUser = null;
 let userData = null;
 let selectedTrainingId = null;
@@ -27,75 +24,42 @@ let selectedTrainingPrice = 0;
 // 🔐 ОСНОВНЫЕ ФУНКЦИИ
 // ============================================
 
-// ПЕРЕКЛЮЧЕНИЕ ЭКРАНОВ
 function showScreen(screenName) {
-    // Скрыть все экраны
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
     });
     
-    // Показать нужный экран
     const targetScreen = document.getElementById(screenName + 'Screen');
-    if (targetScreen) {
-        targetScreen.classList.add('active');
-    }
+    if (targetScreen) targetScreen.classList.add('active');
     
-    // Обновить активную кнопку в меню
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.dataset.screen === screenName) {
-            btn.classList.add('active');
-        }
+        if (btn.dataset.screen === screenName) btn.classList.add('active');
     });
     
-    // Загрузить данные для экрана
     switch(screenName) {
-        case 'schedule':
-            loadTrainings();
-            break;
-        case 'balance':
-            loadTransactions();
-            break;
-        case 'myBookings':
-            loadMyBookings();
-            break;
-        case 'ratings':
-            loadMyRatings();
-            break;
-        case 'trainer':
-            loadTrainerStats();
-            break;
+        case 'schedule': loadTrainings(); break;
+        case 'balance': loadTransactions(); break;
+        case 'myBookings': loadMyBookings(); break;
+        case 'ratings': loadMyRatings(); break;
+        case 'trainer': loadTrainerStats(); break;
     }
 }
 
-// ОТКРЫТЬ МОДАЛЬНОЕ ОКНО
 function openModal(modalId) {
     document.getElementById(modalId).style.display = 'flex';
 }
 
-// ЗАКРЫТЬ МОДАЛЬНОЕ ОКНО
 function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
 }
 
-// ============================================
-// 🔐 АВТОРИЗАЦИЯ
-// ============================================
-
-// РЕГИСТРАЦИЯ
 async function register() {
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     
-    if (!email || !password) {
-        alert('Введите email и пароль');
-        return;
-    }
-    
-    if (password.length < 6) {
-        alert('Пароль должен быть минимум 6 символов');
-        return;
-    }
+    if (!email || !password) return alert('Введите email и пароль');
+    if (password.length < 6) return alert('Пароль минимум 6 символов');
     
     try {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
@@ -109,37 +73,29 @@ async function register() {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        alert('✅ Регистрация успешна! Вам начислено 100 баллов.');
+        alert('✅ Регистрация успешна! 100 баллов начислено.');
     } catch (error) {
-        alert('❌ Ошибка регистрации: ' + error.message);
+        alert('❌ Ошибка: ' + error.message);
     }
 }
 
-// ВХОД
 async function login() {
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     
-    if (!email || !password) {
-        alert('Введите email и пароль');
-        return;
-    }
+    if (!email || !password) return alert('Введите email и пароль');
     
     try {
         await auth.signInWithEmailAndPassword(email, password);
     } catch (error) {
-        alert('❌ Ошибка входа: ' + error.message);
+        alert('❌ Ошибка: ' + error.message);
     }
 }
 
-// ВЫХОД
 async function logout() {
-    if (confirm('Выйти из системы?')) {
-        await auth.signOut();
-    }
+    if (confirm('Выйти?')) await auth.signOut();
 }
 
-// ЗАГРУЗКА ДАННЫХ ПОЛЬЗОВАТЕЛЯ
 async function loadUserData() {
     if (!currentUser) return;
     
@@ -150,27 +106,18 @@ async function loadUserData() {
             updateUI();
         }
     } catch (error) {
-        console.error('Ошибка загрузки данных:', error);
+        console.error('Ошибка:', error);
     }
 }
 
-// ОБНОВЛЕНИЕ ИНТЕРФЕЙСА
 function updateUI() {
     if (!userData) return;
     
-    // Имя пользователя
     document.getElementById('userName').textContent = userData.name || userData.email;
-    
-    // Баланс
     document.getElementById('balanceAmount').textContent = userData.balance || 0;
-    
-    // Кнопка выхода
     document.getElementById('logoutBtn').classList.remove('hidden');
-    
-    // Нижнее меню
     document.querySelector('.bottom-nav').style.display = 'flex';
     
-    // Панель тренера
     const trainerNavBtn = document.getElementById('trainerNavBtn');
     if (userData.role === 'trainer') {
         trainerNavBtn.style.display = 'flex';
@@ -180,10 +127,9 @@ function updateUI() {
 }
 
 // ============================================
-// 🏋️‍♂️ ФУНКЦИИ ТРЕНИРОВОК (для всех)
+// 🏋️‍♂️ ТРЕНИРОВКИ
 // ============================================
 
-// ЗАГРУЗКА ТРЕНИРОВОК
 async function loadTrainings() {
     try {
         const querySnapshot = await db.collection('trainings')
@@ -196,7 +142,7 @@ async function loadTrainings() {
         container.innerHTML = '';
         
         if (querySnapshot.empty) {
-            container.innerHTML = '<p class="text-center">Нет предстоящих тренировок</p>';
+            container.innerHTML = '<p class="text-center">Нет тренировок</p>';
             return;
         }
         
@@ -212,7 +158,6 @@ async function loadTrainings() {
                     <span><i class="far fa-calendar"></i> ${date.toLocaleDateString()}</span>
                     <span><i class="far fa-clock"></i> ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     <span><i class="fas fa-coins"></i> ${training.price || 0} баллов</span>
-                    <span><i class="fas fa-users"></i> ${training.maxParticipants || 'Без ограничений'}</span>
                 </div>
                 ${training.description ? `<p>${training.description}</p>` : ''}
                 ${training.trainerName ? `<p><small><i class="fas fa-user-tie"></i> ${training.trainerName}</small></p>` : ''}
@@ -235,30 +180,24 @@ async function loadTrainings() {
             container.appendChild(card);
         });
     } catch (error) {
-        console.error('Ошибка загрузки тренировок:', error);
-        document.getElementById('trainingsList').innerHTML = `
-            <p class="text-center">Ошибка загрузки тренировок</p>
-        `;
+        console.error('Ошибка:', error);
+        document.getElementById('trainingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
     }
 }
 
-// ОБНОВИТЬ РАСПИСАНИЕ
 function refreshSchedule() {
     loadTrainings();
-    alert('Расписание обновлено!');
+    alert('Обновлено!');
 }
 
 // ============================================
-// 💰 ФУНКЦИИ БАЛАНСА И ТРАНЗАКЦИЙ
+// 💰 БАЛАНС И ТРАНЗАКЦИИ
 // ============================================
 
-// ЗАГРУЗКА ТРАНЗАКЦИЙ
 async function loadTransactions() {
     try {
         const querySnapshot = await db.collection('transactions')
             .where('userId', '==', currentUser.uid)
-            .orderBy('createdAt', 'desc')
-            .limit(20)
             .get();
         
         const container = document.getElementById('transactionsList');
@@ -267,6 +206,19 @@ async function loadTransactions() {
             container.innerHTML = '<p class="text-center">Нет транзакций</p>';
             return;
         }
+        
+        const transactions = [];
+        querySnapshot.forEach(doc => {
+            const trans = doc.data();
+            trans.id = doc.id;
+            transactions.push(trans);
+        });
+        
+        transactions.sort((a, b) => {
+            const dateA = a.createdAt?.toDate() || new Date(0);
+            const dateB = b.createdAt?.toDate() || new Date(0);
+            return dateB - dateA;
+        });
         
         let html = `
             <table>
@@ -281,8 +233,7 @@ async function loadTransactions() {
                 <tbody>
         `;
         
-        querySnapshot.forEach(doc => {
-            const trans = doc.data();
+        transactions.slice(0, 20).forEach(trans => {
             const date = trans.createdAt?.toDate() || new Date();
             const typeClass = trans.type === 'credit' ? 'status-success' : 'status-danger';
             
@@ -299,29 +250,40 @@ async function loadTransactions() {
         html += `</tbody></table>`;
         container.innerHTML = html;
     } catch (error) {
-        console.error('Ошибка загрузки транзакций:', error);
+        console.error('Ошибка:', error);
+        document.getElementById('transactionsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
     }
 }
 
 // ============================================
-// 📝 ФУНКЦИИ ЗАПИСЕЙ ПОЛЬЗОВАТЕЛЯ
+// 📝 МОИ ЗАПИСИ
 // ============================================
 
-// ЗАГРУЗКА МОИХ ЗАПИСЕЙ
 async function loadMyBookings() {
     try {
         const querySnapshot = await db.collection('registrations')
             .where('userId', '==', currentUser.uid)
-            .orderBy('registeredAt', 'desc')
-            .limit(20)
             .get();
         
         const container = document.getElementById('myBookingsList');
         
         if (querySnapshot.empty) {
-            container.innerHTML = '<p class="text-center">У вас нет записей на тренировки</p>';
+            container.innerHTML = '<p class="text-center">Нет записей</p>';
             return;
         }
+        
+        const registrations = [];
+        querySnapshot.forEach(doc => {
+            const reg = doc.data();
+            reg.id = doc.id;
+            registrations.push(reg);
+        });
+        
+        const trainingPromises = registrations.map(reg => 
+            db.collection('trainings').doc(reg.trainingId).get()
+        );
+        
+        const trainingSnapshots = await Promise.all(trainingPromises);
         
         let html = `
             <table>
@@ -337,28 +299,8 @@ async function loadMyBookings() {
                 <tbody>
         `;
         
-        // Получаем данные о тренировках
-        const trainingPromises = [];
-        const registrations = [];
-        
-        querySnapshot.forEach(doc => {
-            const reg = doc.data();
-            reg.id = doc.id;
-            registrations.push(reg);
-            trainingPromises.push(db.collection('trainings').doc(reg.trainingId).get());
-        });
-        
-        const trainingSnapshots = await Promise.all(trainingPromises);
-        const trainings = {};
-        trainingSnapshots.forEach((snap, index) => {
-            if (snap.exists) {
-                trainings[registrations[index].trainingId] = snap.data();
-            }
-        });
-        
-        // Формируем таблицу
-        registrations.forEach(reg => {
-            const training = trainings[reg.trainingId] || {};
+        registrations.forEach((reg, index) => {
+            const training = trainingSnapshots[index].exists ? trainingSnapshots[index].data() : {};
             const date = training.date?.toDate() || new Date();
             const statusClass = reg.attended ? 'status-success' : 'status-warning';
             const attendanceClass = reg.attended ? 'status-success' : 'status-danger';
@@ -377,30 +319,40 @@ async function loadMyBookings() {
         html += `</tbody></table>`;
         container.innerHTML = html;
     } catch (error) {
-        console.error('Ошибка загрузки записей:', error);
-        document.getElementById('myBookingsList').innerHTML = '<p class="text-center">Ошибка загрузки данных</p>';
+        console.error('Ошибка:', error);
+        document.getElementById('myBookingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
     }
 }
 
 // ============================================
-// ⭐ ФУНКЦИИ ОЦЕНОК
+// ⭐ ОЦЕНКИ
 // ============================================
 
-// ЗАГРУЗКА МОИХ ОЦЕНОК
 async function loadMyRatings() {
     try {
         const querySnapshot = await db.collection('ratings')
             .where('userId', '==', currentUser.uid)
-            .orderBy('createdAt', 'desc')
-            .limit(20)
             .get();
         
         const container = document.getElementById('ratingsList');
         
         if (querySnapshot.empty) {
-            container.innerHTML = '<p class="text-center">У вас пока нет оценок</p>';
+            container.innerHTML = '<p class="text-center">Нет оценок</p>';
             return;
         }
+        
+        const ratings = [];
+        querySnapshot.forEach(doc => {
+            const rating = doc.data();
+            rating.id = doc.id;
+            ratings.push(rating);
+        });
+        
+        const trainingPromises = ratings.map(rating => 
+            db.collection('trainings').doc(rating.trainingId).get()
+        );
+        
+        const trainingSnapshots = await Promise.all(trainingPromises);
         
         let html = `
             <table>
@@ -416,24 +368,9 @@ async function loadMyRatings() {
                 <tbody>
         `;
         
-        // Получаем данные о тренировках
-        const trainingPromises = [];
-        const ratings = [];
-        
-        querySnapshot.forEach(doc => {
-            const rating = doc.data();
-            rating.id = doc.id;
-            ratings.push(rating);
-            trainingPromises.push(db.collection('trainings').doc(rating.trainingId).get());
-        });
-        
-        const trainingSnapshots = await Promise.all(trainingPromises);
-        
         ratings.forEach((rating, index) => {
             const training = trainingSnapshots[index].exists ? trainingSnapshots[index].data() : {};
             const date = rating.createdAt?.toDate() || new Date();
-            
-            // Создаем звезды для оценки
             const stars = '★'.repeat(rating.score) + '☆'.repeat(5 - rating.score);
             
             html += `
@@ -450,8 +387,8 @@ async function loadMyRatings() {
         html += `</tbody></table>`;
         container.innerHTML = html;
     } catch (error) {
-        console.error('Ошибка загрузки оценок:', error);
-        document.getElementById('ratingsList').innerHTML = '<p class="text-center">Ошибка загрузки данных</p>';
+        console.error('Ошибка:', error);
+        document.getElementById('ratingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
     }
 }
 
@@ -459,14 +396,9 @@ async function loadMyRatings() {
 // 👨‍🏫 ФУНКЦИИ ТРЕНЕРА
 // ============================================
 
-// ОТКРЫТЬ МОДАЛКУ СОЗДАНИЯ ТРЕНИРОВКИ
 function openCreateTrainingModal() {
-    if (userData.role !== 'trainer') {
-        alert('Только тренер может создавать тренировки');
-        return;
-    }
+    if (userData.role !== 'trainer') return alert('Только тренер');
     
-    // Установить дату по умолчанию (завтра, 19:00)
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(19, 0, 0, 0);
@@ -475,12 +407,8 @@ function openCreateTrainingModal() {
     openModal('createTrainingModal');
 }
 
-// СОЗДАТЬ ТРЕНИРОВКУ
 async function createTraining() {
-    if (userData.role !== 'trainer') {
-        alert('Только тренер может создавать тренировки');
-        return;
-    }
+    if (userData.role !== 'trainer') return alert('Только тренер');
     
     const title = document.getElementById('trainingTitle').value;
     const date = document.getElementById('trainingDate').value;
@@ -488,10 +416,7 @@ async function createTraining() {
     const max = document.getElementById('trainingMax').value;
     const desc = document.getElementById('trainingDesc').value;
     
-    if (!title || !date || !price) {
-        alert('Заполните обязательные поля: название, дата и стоимость');
-        return;
-    }
+    if (!title || !date || !price) return alert('Заполните обязательные поля');
     
     try {
         await db.collection('trainings').add({
@@ -509,7 +434,6 @@ async function createTraining() {
         closeModal('createTrainingModal');
         loadTrainings();
         
-        // Очистить поля
         document.getElementById('trainingTitle').value = '';
         document.getElementById('trainingPrice').value = '';
         document.getElementById('trainingDesc').value = '';
@@ -519,19 +443,13 @@ async function createTraining() {
     }
 }
 
-// ОТКРЫТЬ МОДАЛКУ ОТМЕТКИ ПРИСУТСТВИЯ
 async function openAttendanceModal() {
-    if (userData.role !== 'trainer') {
-        alert('Только тренер может отмечать присутствие');
-        return;
-    }
+    if (userData.role !== 'trainer') return alert('Только тренер');
     
     try {
-        // Загрузить тренировки тренера
         const trainingsSnapshot = await db.collection('trainings')
             .where('trainerId', '==', currentUser.uid)
             .where('date', '<=', firebase.firestore.Timestamp.now())
-            .orderBy('date', 'desc')
             .limit(10)
             .get();
         
@@ -547,21 +465,19 @@ async function openAttendanceModal() {
             select.appendChild(option);
         });
         
-        // Обработчик выбора тренировки
         select.onchange = async function() {
             if (!this.value) return;
             
             const trainingId = this.value;
             const usersDiv = document.getElementById('attendanceUsers');
-            usersDiv.innerHTML = '<p>Загрузка записей...</p>';
+            usersDiv.innerHTML = '<p>Загрузка...</p>';
             
-            // Загрузить записи на эту тренировку
             const registrationsSnapshot = await db.collection('registrations')
                 .where('trainingId', '==', trainingId)
                 .get();
             
             if (registrationsSnapshot.empty) {
-                usersDiv.innerHTML = '<p>На эту тренировку нет записей</p>';
+                usersDiv.innerHTML = '<p>Нет записей</p>';
                 return;
             }
             
@@ -599,17 +515,13 @@ async function openAttendanceModal() {
         
         openModal('attendanceModal');
     } catch (error) {
-        alert('Ошибка загрузки данных: ' + error.message);
+        alert('Ошибка: ' + error.message);
     }
 }
 
-// СОХРАНИТЬ ОТМЕТКИ ПРИСУТСТВИЯ
 async function saveAttendance() {
     const trainingId = document.getElementById('attendanceTraining').value;
-    if (!trainingId) {
-        alert('Выберите тренировку');
-        return;
-    }
+    if (!trainingId) return alert('Выберите тренировку');
     
     const checkboxes = document.querySelectorAll('#attendanceUsers input[type="checkbox"]');
     let updated = 0;
@@ -617,54 +529,12 @@ async function saveAttendance() {
     try {
         for (const checkbox of checkboxes) {
             const registrationId = checkbox.dataset.registration;
-            const userId = checkbox.dataset.user;
             const attended = checkbox.checked;
             
-            // Обновляем запись о регистрации
             await db.collection('registrations').doc(registrationId).update({
                 attended: attended,
                 attendedAt: attended ? firebase.firestore.FieldValue.serverTimestamp() : null
             });
-            
-            // Если отметили присутствие и еще не списывали - списываем
-            if (attended) {
-                const registrationDoc = await db.collection('registrations').doc(registrationId).get();
-                const registration = registrationDoc.data();
-                
-                if (!registration.charged) {
-                    // Получаем стоимость тренировки
-                    const trainingDoc = await db.collection('trainings').doc(trainingId).get();
-                    const training = trainingDoc.data();
-                    
-                    // Списываем баланс через транзакцию
-                    await db.runTransaction(async (transaction) => {
-                        const userRef = db.collection('users').doc(userId);
-                        const userDoc = await transaction.get(userRef);
-                        
-                        if (userDoc.exists) {
-                            const currentBalance = userDoc.data().balance;
-                            const newBalance = currentBalance - (training.price || 0);
-                            
-                            transaction.update(userRef, { balance: newBalance });
-                            transaction.update(db.collection('registrations').doc(registrationId), { 
-                                charged: true 
-                            });
-                            
-                            // Создаем транзакцию
-                            const transRef = db.collection('transactions').doc();
-                            transaction.set(transRef, {
-                                userId: userId,
-                                trainingId: trainingId,
-                                amount: training.price || 0,
-                                type: 'debit',
-                                description: `Списание за тренировку: ${training.title}`,
-                                createdBy: currentUser.uid,
-                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                        }
-                    });
-                }
-            }
             
             updated++;
         }
@@ -672,19 +542,14 @@ async function saveAttendance() {
         alert(`✅ Обновлено ${updated} записей`);
         closeModal('attendanceModal');
     } catch (error) {
-        alert('❌ Ошибка сохранения: ' + error.message);
+        alert('❌ Ошибка: ' + error.message);
     }
 }
 
-// ОТКРЫТЬ МОДАЛКУ НАЧИСЛЕНИЯ БАЛАНСА
 async function openAdjustBalanceModal() {
-    if (userData.role !== 'trainer') {
-        alert('Только тренер может изменять баланс');
-        return;
-    }
+    if (userData.role !== 'trainer') return alert('Только тренер');
     
     try {
-        // Загрузить всех пользователей
         const usersSnapshot = await db.collection('users')
             .where('role', '==', 'user')
             .limit(50)
@@ -703,44 +568,30 @@ async function openAdjustBalanceModal() {
         
         openModal('balanceModal');
     } catch (error) {
-        alert('Ошибка загрузки пользователей: ' + error.message);
+        alert('Ошибка: ' + error.message);
     }
 }
 
-// СОХРАНИТЬ ИЗМЕНЕНИЕ БАЛАНСА
 async function saveBalanceAdjustment() {
     const userId = document.getElementById('balanceUser').value;
     const amount = parseInt(document.getElementById('balanceAmount').value);
     const reason = document.getElementById('balanceReason').value;
     
-    if (!userId || !amount || isNaN(amount)) {
-        alert('Заполните все поля корректно');
-        return;
-    }
-    
-    if (!reason) {
-        alert('Укажите причину изменения баланса');
-        return;
-    }
+    if (!userId || !amount || isNaN(amount)) return alert('Заполните все поля');
+    if (!reason) return alert('Укажите причину');
     
     try {
         await db.runTransaction(async (transaction) => {
             const userRef = db.collection('users').doc(userId);
             const userDoc = await transaction.get(userRef);
             
-            if (!userDoc.exists) {
-                throw new Error('Пользователь не найден');
-            }
+            if (!userDoc.exists) throw new Error('Пользователь не найден');
             
             const currentBalance = userDoc.data().balance;
             const newBalance = currentBalance + amount;
             
-            // Обновляем баланс
-            transaction.update(userRef, { 
-                balance: newBalance 
-            });
+            transaction.update(userRef, { balance: newBalance });
             
-            // Создаем транзакцию
             const transRef = db.collection('transactions').doc();
             transaction.set(transRef, {
                 userId: userId,
@@ -752,10 +603,9 @@ async function saveBalanceAdjustment() {
             });
         });
         
-        alert(`✅ Баланс успешно обновлен на ${amount} баллов`);
+        alert(`✅ Баланс обновлен на ${amount} баллов`);
         closeModal('balanceModal');
         
-        // Очистить поля
         document.getElementById('balanceAmount').value = '';
         document.getElementById('balanceReason').value = '';
         
@@ -764,18 +614,12 @@ async function saveBalanceAdjustment() {
     }
 }
 
-// ОТКРЫТЬ МОДАЛКУ ВЫСТАВЛЕНИЯ ОЦЕНОК
 async function openRateUsersModal() {
-    if (userData.role !== 'trainer') {
-        alert('Только тренер может выставлять оценки');
-        return;
-    }
+    if (userData.role !== 'trainer') return alert('Только тренер');
     
     try {
-        // Загрузить тренировки тренера
         const trainingsSnapshot = await db.collection('trainings')
             .where('trainerId', '==', currentUser.uid)
-            .orderBy('date', 'desc')
             .limit(10)
             .get();
         
@@ -791,22 +635,20 @@ async function openRateUsersModal() {
             select.appendChild(option);
         });
         
-        // Обработчик выбора тренировки
         select.onchange = async function() {
             if (!this.value) return;
             
             const trainingId = this.value;
             const usersDiv = document.getElementById('ratingUsers');
-            usersDiv.innerHTML = '<p>Загрузка участников...</p>';
+            usersDiv.innerHTML = '<p>Загрузка...</p>';
             
-            // Загрузить участников тренировки
             const registrationsSnapshot = await db.collection('registrations')
                 .where('trainingId', '==', trainingId)
                 .where('attended', '==', true)
                 .get();
             
             if (registrationsSnapshot.empty) {
-                usersDiv.innerHTML = '<p>На этой тренировке не было участников</p>';
+                usersDiv.innerHTML = '<p>Нет участников</p>';
                 return;
             }
             
@@ -845,7 +687,7 @@ async function openRateUsersModal() {
                         <div>
                             <label>Комментарий:</label>
                             <textarea id="comment_${reg.userId}" 
-                                      placeholder="Отзыв о тренировке" 
+                                      placeholder="Отзыв" 
                                       style="width: 100%; padding: 8px; margin-top: 5px; border-radius: 5px; border: 1px solid #ddd;"></textarea>
                         </div>
                     </div>
@@ -857,23 +699,17 @@ async function openRateUsersModal() {
         
         openModal('ratingsModal');
     } catch (error) {
-        alert('Ошибка загрузки данных: ' + error.message);
+        alert('Ошибка: ' + error.message);
     }
 }
 
-// СОХРАНИТЬ ОЦЕНКИ
 async function saveRatings() {
     const trainingId = document.getElementById('ratingTraining').value;
-    if (!trainingId) {
-        alert('Выберите тренировку');
-        return;
-    }
+    if (!trainingId) return alert('Выберите тренировку');
     
-    // Получаем данные о тренировке
     const trainingDoc = await db.collection('trainings').doc(trainingId).get();
     const training = trainingDoc.data();
     
-    // Получаем участников
     const registrationsSnapshot = await db.collection('registrations')
         .where('trainingId', '==', trainingId)
         .where('attended', '==', true)
@@ -890,7 +726,6 @@ async function saveRatings() {
             const comment = document.getElementById(`comment_${userId}`)?.value;
             
             if (score) {
-                // Сохраняем оценку
                 await db.collection('ratings').add({
                     userId: userId,
                     trainingId: trainingId,
@@ -909,21 +744,18 @@ async function saveRatings() {
         alert(`✅ Сохранено ${saved} оценок`);
         closeModal('ratingsModal');
     } catch (error) {
-        alert('❌ Ошибка сохранения оценок: ' + error.message);
+        alert('❌ Ошибка: ' + error.message);
     }
 }
 
-// ЗАГРУЗКА СТАТИСТИКИ ТРЕНЕРА
 async function loadTrainerStats() {
     if (userData.role !== 'trainer') return;
     
     try {
-        // Получаем тренировки тренера
         const trainingsSnapshot = await db.collection('trainings')
             .where('trainerId', '==', currentUser.uid)
             .get();
         
-        // Получаем записи на эти тренировки
         let totalParticipants = 0;
         let totalRevenue = 0;
         let upcomingTrainings = 0;
@@ -935,20 +767,15 @@ async function loadTrainerStats() {
             const training = doc.data();
             const isPast = training.date.toDate() < now.toDate();
             
-            if (isPast) {
-                pastTrainings++;
-            } else {
-                upcomingTrainings++;
-            }
+            if (isPast) pastTrainings++;
+            else upcomingTrainings++;
             
-            // Подсчет участников
             const registrationsSnapshot = await db.collection('registrations')
                 .where('trainingId', '==', doc.id)
                 .get();
             
             totalParticipants += registrationsSnapshot.size;
             
-            // Подсчет выручки
             registrationsSnapshot.forEach(regDoc => {
                 if (regDoc.data().charged) {
                     totalRevenue += training.price || 0;
@@ -983,190 +810,14 @@ async function loadTrainerStats() {
             </div>
         `;
     } catch (error) {
-        console.error('Ошибка загрузки статистики:', error);
+        console.error('Ошибка:', error);
     }
 }
 
 // ============================================
-// 📋 ФУНКЦИИ ЗАПИСИ НА ТРЕНИРОВКИ
+// ✏️ РЕДАКТИРОВАНИЕ ТРЕНИРОВОК
 // ============================================
 
-// ОТКРЫТЬ МОДАЛКУ ЗАПИСИ
-function openRegisterModal(trainingId, price, title) {
-    selectedTrainingId = trainingId;
-    selectedTrainingPrice = price;
-    
-    document.getElementById('registerTrainingTitle').textContent = title;
-    document.getElementById('registerTrainingPrice').textContent = price;
-    document.getElementById('registerUserBalance').textContent = userData.balance;
-    
-    openModal('registerModal');
-}
-
-// ПОДТВЕРДИТЬ ЗАПИСЬ НА ТРЕНИРОВКУ
-async function confirmRegistration() {
-    if (!selectedTrainingId || !userData) return;
-    
-    if (userData.balance < selectedTrainingPrice) {
-        alert(`❌ Недостаточно баллов! Нужно: ${selectedTrainingPrice}, у вас: ${userData.balance}`);
-        closeModal('registerModal');
-        return;
-    }
-    
-    try {
-        await db.runTransaction(async (transaction) => {
-            // Проверяем баланс
-            const userRef = db.collection('users').doc(currentUser.uid);
-            const userDoc = await transaction.get(userRef);
-            const currentBalance = userDoc.data().balance;
-            
-            if (currentBalance < selectedTrainingPrice) {
-                throw new Error('Недостаточно баллов');
-            }
-            
-            // Проверяем, не записан ли уже
-            const registrationsQuery = await db.collection('registrations')
-                .where('userId', '==', currentUser.uid)
-                .where('trainingId', '==', selectedTrainingId)
-                .get();
-            
-            if (!registrationsQuery.empty) {
-                throw new Error('Вы уже записаны на эту тренировку');
-            }
-            
-            // Получаем данные о тренировке
-            const trainingRef = db.collection('trainings').doc(selectedTrainingId);
-            const trainingDoc = await transaction.get(trainingRef);
-            const training = trainingDoc.data();
-            
-            // Проверяем количество участников
-            const participantsQuery = await db.collection('registrations')
-                .where('trainingId', '==', selectedTrainingId)
-                .get();
-            
-            if (training.maxParticipants && participantsQuery.size >= training.maxParticipants) {
-                throw new Error('На тренировку уже нет свободных мест');
-            }
-            
-            // Списываем баллы
-            transaction.update(userRef, {
-                balance: currentBalance - selectedTrainingPrice
-            });
-            
-            // Создаем запись о регистрации
-            const regRef = db.collection('registrations').doc();
-            transaction.set(regRef, {
-                userId: currentUser.uid,
-                trainingId: selectedTrainingId,
-                willAttend: true,
-                attended: false,
-                charged: true,
-                registeredAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
-            // Создаем транзакцию
-            const transRef = db.collection('transactions').doc();
-            transaction.set(transRef, {
-                userId: currentUser.uid,
-                trainingId: selectedTrainingId,
-                amount: selectedTrainingPrice,
-                type: 'debit',
-                description: `Запись на тренировку: ${training.title}`,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        });
-        
-        alert('✅ Вы успешно записаны на тренировку!');
-        closeModal('registerModal');
-        
-        // Обновляем данные
-        loadUserData();
-        loadTrainings();
-        if (document.getElementById('myBookingsScreen').classList.contains('active')) {
-            loadMyBookings();
-        }
-        
-    } catch (error) {
-        alert('❌ Ошибка записи: ' + error.message);
-        closeModal('registerModal');
-    }
-}
-
-// ============================================
-// 🎯 ИНИЦИАЛИЗАЦИЯ
-// ============================================
-
-// СЛУШАТЕЛЬ СОСТОЯНИЯ АВТОРИЗАЦИИ
-auth.onAuthStateChanged(async (user) => {
-    if (user) {
-        currentUser = user;
-        await loadUserData();
-        
-        // Показать основное приложение
-        document.getElementById('loginScreen').classList.remove('active');
-        showScreen('schedule');
-    } else {
-        currentUser = null;
-        userData = null;
-        
-        // Показать экран входа
-        document.getElementById('loginScreen').classList.add('active');
-        document.querySelectorAll('.screen:not(#loginScreen)').forEach(screen => {
-            screen.classList.remove('active');
-        });
-        document.querySelector('.bottom-nav').style.display = 'none';
-        
-        // Скрыть кнопку выхода
-        document.getElementById('logoutBtn').classList.add('hidden');
-        document.getElementById('userName').textContent = 'Гость';
-    }
-});
-
-// ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ
-document.addEventListener('DOMContentLoaded', function() {
-    // Обработчики кнопок
-    document.getElementById('loginBtn').addEventListener('click', login);
-    document.getElementById('registerBtn').addEventListener('click', register);
-    document.getElementById('logoutBtn').addEventListener('click', logout);
-    
-    // Обработчики нижнего меню
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const screen = this.dataset.screen;
-            if (screen) {
-                showScreen(screen);
-            }
-        });
-    });
-    
-    // Ввод по Enter в полях авторизации
-    document.getElementById('loginPassword').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            login();
-        }
-    });
-    
-    // Тестовые аккаунты (быстрый вход)
-    document.querySelectorAll('.demo-accounts p').forEach(p => {
-        p.addEventListener('click', function(e) {
-            if (e.target.textContent.includes('user@test.com')) {
-                document.getElementById('loginEmail').value = 'user@test.com';
-                document.getElementById('loginPassword').value = '123456';
-            } else if (e.target.textContent.includes('trainer@test.com')) {
-                document.getElementById('loginEmail').value = 'trainer@test.com';
-                document.getElementById('loginPassword').value = '123456';
-            }
-        });
-    });
-    
-    // Автофокус на поле email
-    document.getElementById('loginEmail')?.focus();
-});
-// ============================================
-// 👨‍🏫 ФУНКЦИИ РЕДАКТИРОВАНИЯ ТРЕНИРОВОК
-// ============================================
-
-// ОТКРЫТЬ МОДАЛКУ УПРАВЛЕНИЯ ТРЕНИРОВКАМИ
 async function openManageTrainingsModal() {
     if (userData.role !== 'trainer') {
         alert('Только тренер может управлять тренировками');
@@ -1174,14 +825,11 @@ async function openManageTrainingsModal() {
     }
     
     try {
-        // Загрузить тренировки тренера
         const trainingsSnapshot = await db.collection('trainings')
             .where('trainerId', '==', currentUser.uid)
-            .orderBy('date', 'desc')
             .limit(20)
             .get();
         
-        // Создаем модальное окно
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.style.cssText = `
@@ -1260,11 +908,10 @@ async function openManageTrainingsModal() {
         document.body.appendChild(modal);
         
     } catch (error) {
-        alert('Ошибка загрузки тренировок: ' + error.message);
+        alert('Ошибка: ' + error.message);
     }
 }
 
-// РЕДАКТИРОВАТЬ ТРЕНИРОВКУ
 async function editTraining(trainingId) {
     if (userData.role !== 'trainer') {
         alert('Только тренер может редактировать тренировки');
@@ -1281,7 +928,6 @@ async function editTraining(trainingId) {
         const training = trainingDoc.data();
         const date = training.date.toDate();
         
-        // Создаем модальное окно редактирования
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.style.cssText = `
@@ -1297,7 +943,6 @@ async function editTraining(trainingId) {
             z-index: 1000;
         `;
         
-        // Форматируем дату для input[type="datetime-local"]
         const formattedDate = date.toISOString().slice(0, 16);
         
         modal.innerHTML = `
@@ -1376,11 +1021,10 @@ async function editTraining(trainingId) {
         document.body.appendChild(modal);
         
     } catch (error) {
-        alert('Ошибка загрузки тренировки: ' + error.message);
+        alert('Ошибка: ' + error.message);
     }
 }
 
-// СОХРАНИТЬ ИЗМЕНЕНИЯ ТРЕНИРОВКИ
 async function saveTrainingEdit(trainingId) {
     const title = document.getElementById('editTrainingTitle').value;
     const date = document.getElementById('editTrainingDate').value;
@@ -1405,25 +1049,19 @@ async function saveTrainingEdit(trainingId) {
         
         alert('✅ Тренировка обновлена!');
         
-        // Закрыть все модальные окна
         document.querySelectorAll('.modal-overlay').forEach(modal => modal.remove());
         
-        // Обновить данные
         loadTrainings();
         
     } catch (error) {
-        alert('❌ Ошибка обновления: ' + error.message);
+        alert('❌ Ошибка: ' + error.message);
     }
 }
 
-// УДАЛИТЬ ТРЕНИРОВКУ
 async function deleteTraining(trainingId) {
-    if (!confirm('Удалить эту тренировку? Все записи на нее также будут удалены.')) {
-        return;
-    }
+    if (!confirm('Удалить эту тренировку?')) return;
     
     try {
-        // Сначала проверяем, есть ли записи на тренировку
         const registrationsSnapshot = await db.collection('registrations')
             .where('trainingId', '==', trainingId)
             .get();
@@ -1434,10 +1072,8 @@ async function deleteTraining(trainingId) {
             }
         }
         
-        // Удаляем тренировку
         await db.collection('trainings').doc(trainingId).delete();
         
-        // Удаляем связанные записи (опционально)
         const batch = db.batch();
         registrationsSnapshot.forEach(doc => {
             batch.delete(doc.ref);
@@ -1446,13 +1082,163 @@ async function deleteTraining(trainingId) {
         
         alert('✅ Тренировка удалена!');
         
-        // Закрыть все модальные окна
         document.querySelectorAll('.modal-overlay').forEach(modal => modal.remove());
         
-        // Обновить данные
         loadTrainings();
         
     } catch (error) {
-        alert('❌ Ошибка удаления: ' + error.message);
+        alert('❌ Ошибка: ' + error.message);
     }
 }
+
+// ============================================
+// 📋 ЗАПИСЬ НА ТРЕНИРОВКИ
+// ============================================
+
+function openRegisterModal(trainingId, price, title) {
+    selectedTrainingId = trainingId;
+    selectedTrainingPrice = price;
+    
+    document.getElementById('registerTrainingTitle').textContent = title;
+    document.getElementById('registerTrainingPrice').textContent = price;
+    document.getElementById('registerUserBalance').textContent = userData.balance;
+    
+    openModal('registerModal');
+}
+
+async function confirmRegistration() {
+    if (!selectedTrainingId || !userData) return;
+    
+    if (userData.balance < selectedTrainingPrice) {
+        alert(`❌ Недостаточно баллов! Нужно: ${selectedTrainingPrice}, у вас: ${userData.balance}`);
+        closeModal('registerModal');
+        return;
+    }
+    
+    try {
+        await db.runTransaction(async (transaction) => {
+            const userRef = db.collection('users').doc(currentUser.uid);
+            const userDoc = await transaction.get(userRef);
+            const currentBalance = userDoc.data().balance;
+            
+            if (currentBalance < selectedTrainingPrice) {
+                throw new Error('Недостаточно баллов');
+            }
+            
+            const registrationsQuery = await db.collection('registrations')
+                .where('userId', '==', currentUser.uid)
+                .where('trainingId', '==', selectedTrainingId)
+                .get();
+            
+            if (!registrationsQuery.empty) {
+                throw new Error('Вы уже записаны');
+            }
+            
+            const trainingRef = db.collection('trainings').doc(selectedTrainingId);
+            const trainingDoc = await transaction.get(trainingRef);
+            const training = trainingDoc.data();
+            
+            const participantsQuery = await db.collection('registrations')
+                .where('trainingId', '==', selectedTrainingId)
+                .get();
+            
+            if (training.maxParticipants && participantsQuery.size >= training.maxParticipants) {
+                throw new Error('Нет свободных мест');
+            }
+            
+            transaction.update(userRef, {
+                balance: currentBalance - selectedTrainingPrice
+            });
+            
+            const regRef = db.collection('registrations').doc();
+            transaction.set(regRef, {
+                userId: currentUser.uid,
+                trainingId: selectedTrainingId,
+                willAttend: true,
+                attended: false,
+                charged: true,
+                registeredAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            const transRef = db.collection('transactions').doc();
+            transaction.set(transRef, {
+                userId: currentUser.uid,
+                trainingId: selectedTrainingId,
+                amount: selectedTrainingPrice,
+                type: 'debit',
+                description: `Запись: ${training.title}`,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        
+        alert('✅ Вы записаны!');
+        closeModal('registerModal');
+        
+        loadUserData();
+        loadTrainings();
+        if (document.getElementById('myBookingsScreen').classList.contains('active')) {
+            loadMyBookings();
+        }
+        
+    } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+        closeModal('registerModal');
+    }
+}
+
+// ============================================
+// 🎯 ИНИЦИАЛИЗАЦИЯ
+// ============================================
+
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        currentUser = user;
+        await loadUserData();
+        
+        document.getElementById('loginScreen').classList.remove('active');
+        showScreen('schedule');
+    } else {
+        currentUser = null;
+        userData = null;
+        
+        document.getElementById('loginScreen').classList.add('active');
+        document.querySelectorAll('.screen:not(#loginScreen)').forEach(screen => {
+            screen.classList.remove('active');
+        });
+        document.querySelector('.bottom-nav').style.display = 'none';
+        
+        document.getElementById('logoutBtn').classList.add('hidden');
+        document.getElementById('userName').textContent = 'Гость';
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('loginBtn').addEventListener('click', login);
+    document.getElementById('registerBtn').addEventListener('click', register);
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const screen = this.dataset.screen;
+            if (screen) showScreen(screen);
+        });
+    });
+    
+    document.getElementById('loginPassword').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') login();
+    });
+    
+    document.querySelectorAll('.demo-accounts p').forEach(p => {
+        p.addEventListener('click', function(e) {
+            if (e.target.textContent.includes('user@test.com')) {
+                document.getElementById('loginEmail').value = 'user@test.com';
+                document.getElementById('loginPassword').value = '123456';
+            } else if (e.target.textContent.includes('trainer@test.com')) {
+                document.getElementById('loginEmail').value = 'trainer@test.com';
+                document.getElementById('loginPassword').value = '123456';
+            }
+        });
+    });
+    
+    document.getElementById('loginEmail')?.focus();
+});
