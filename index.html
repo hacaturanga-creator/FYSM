@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FYSM - Запись на тренировки</title>
+    <title>💪 FYSM - Запись на тренировки</title>
     
     <!-- Исправление для GitHub Pages -->
     <script>
@@ -21,498 +21,537 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
+    <!-- Иконки -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        /* ВСТРАИВАЕМ СТИЛИ В HTML для надежности */
-        body {
+        /* ВСТРАИВАЕМ СТИЛИ В HTML */
+        * {
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            max-width: 400px;
-            width: 90%;
-            text-align: center;
-        }
-        
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        
-        .input {
-            width: 100%;
-            padding: 15px;
-            margin: 10px 0;
-            border: 2px solid #ddd;
-            border-radius: 10px;
-            font-size: 16px;
             box-sizing: border-box;
         }
         
-        .btn {
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        /* ШАПКА */
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .nav-brand {
+            font-size: 1.3rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .nav-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .btn-small {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        /* ОСНОВНОЙ КОНТЕНТ */
+        #appContainer {
+            padding: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .screen {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .screen.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* КАРТОЧКА АВТОРИЗАЦИИ */
+        .auth-card {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            margin: 2rem auto;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        
+        .app-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+        
+        /* КНОПКИ */
+        .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 15px;
+            padding: 1rem 2rem;
             border-radius: 10px;
-            font-size: 16px;
-            margin: 10px 0;
+            font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
             width: 100%;
-            font-weight: bold;
+            margin: 0.5rem 0;
+            transition: transform 0.2s;
         }
         
-        .btn:hover {
-            opacity: 0.9;
+        .btn-primary:hover {
+            transform: translateY(-2px);
         }
         
         .btn-secondary {
-            background: #6c757d;
+            background: #f0f0f0;
+            color: #666;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 100%;
+            margin: 0.5rem 0;
         }
         
+        /* ДЕМО-АККАУНТЫ */
+        .demo-accounts {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 2rem;
+            text-align: left;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        /* КАРТОЧКИ ТРЕНИРОВОК */
+        .trainings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .training-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border-left: 4px solid #667eea;
+        }
+        
+        .training-card h3 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        
+        .training-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin: 1rem 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        /* БАЛАНС */
+        .balance-display {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            margin: 2rem 0;
+        }
+        
+        .balance-amount {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 0.5rem 0;
+        }
+        
+        /* ТАБЛИЦЫ */
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        /* МОДАЛЬНЫЕ ОКНА */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        /* НИЖНЕЕ МЕНЮ */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            display: none;
+            justify-content: space-around;
+            padding: 0.5rem 0;
+            border-top: 1px solid #ddd;
+            z-index: 100;
+        }
+        
+        .nav-btn {
+            background: none;
+            border: none;
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+            color: #666;
+            cursor: pointer;
+        }
+        
+        .nav-btn.active {
+            color: #667eea;
+        }
+        
+        /* УТИЛИТЫ */
         .hidden {
             display: none !important;
         }
         
-        #appContent {
-            display: none;
+        .text-center {
+            text-align: center;
         }
         
-        .balance {
-            font-size: 24px;
-            margin: 20px 0;
-            color: #28a745;
-            font-weight: bold;
+        .mt-1 { margin-top: 0.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .mt-3 { margin-top: 1.5rem; }
+        
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .mb-3 { margin-bottom: 1.5rem; }
+        
+        /* СТАТУСЫ */
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
         }
         
-        .error {
-            color: #dc3545;
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-danger {
             background: #f8d7da;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
+            color: #721c24;
+        }
+        
+        /* АДАПТИВНОСТЬ */
+        @media (max-width: 768px) {
+            .trainings-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .auth-card {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Экран авторизации -->
-        <div id="authContent">
-            <h1>💪 FITBOOK</h1>
-            <p>Система записи на тренировки</p>
-            
-            <div id="errorMessage" class="error hidden"></div>
-            
-            <input type="email" id="email" placeholder="Email" class="input">
-            <input type="password" id="password" placeholder="Пароль" class="input">
-            
-            <button onclick="login()" class="btn">Войти</button>
-            <button onclick="register()" class="btn btn-secondary">Регистрация</button>
-            
-            <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; text-align: left;">
-                <p><strong>Тестовые аккаунты:</strong></p>
-                <p>👤 <a href="#" onclick="setTestUser()">user@test.com / 123456</a></p>
-                <p>👨‍🏫 <a href="#" onclick="setTestTrainer()">trainer@test.com / 123456</a></p>
+    <!-- Навигация -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-dumbbell"></i> FITBOOK
+        </div>
+        <div class="nav-user">
+            <span id="userName">Гость</span>
+            <button id="logoutBtn" class="btn-small hidden">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </nav>
+    
+    <!-- Основной контейнер -->
+    <div id="appContainer">
+        <!-- ЭКРАН АВТОРИЗАЦИИ -->
+        <div id="loginScreen" class="screen active">
+            <div class="auth-card">
+                <div class="app-icon">
+                    <i class="fas fa-dumbbell"></i>
+                </div>
+                <h2>Добро пожаловать в FITBOOK!</h2>
+                <p class="mb-3">Система записи на тренировки с виртуальным балансом</p>
+                
+                <div class="form-group">
+                    <input type="email" id="loginEmail" placeholder="Ваш email" class="form-input">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPassword" placeholder="Пароль" class="form-input">
+                </div>
+                
+                <button id="loginBtn" class="btn-primary">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+                <button id="registerBtn" class="btn-secondary">
+                    <i class="fas fa-user-plus"></i> Регистрация
+                </button>
+                
+                <div class="demo-accounts mt-3">
+                    <h4 class="mb-1"><i class="fas fa-vial"></i> Тестовые аккаунты:</h4>
+                    <p><strong>👤 Пользователь:</strong> user@test.com / 123456</p>
+                    <p><strong>👨‍🏫 Тренер:</strong> trainer@test.com / 123456</p>
+                </div>
             </div>
         </div>
         
-        <!-- Основное приложение -->
-        <div id="appContent">
-            <h1 id="welcomeMessage">Добро пожаловать!</h1>
-            
-            <div class="balance">
-                Баланс: <span id="balanceAmount">0</span> баллов
+        <!-- ЭКРАН РАСПИСАНИЯ -->
+        <div id="scheduleScreen" class="screen">
+            <h2><i class="fas fa-calendar-alt"></i> Расписание тренировок</h2>
+            <button onclick="refreshSchedule()" class="btn-secondary mt-2">
+                <i class="fas fa-sync"></i> Обновить
+            </button>
+            <div id="trainingsList" class="trainings-grid mt-2"></div>
+        </div>
+        
+        <!-- ЭКРАН БАЛАНСА -->
+        <div id="balanceScreen" class="screen">
+            <h2><i class="fas fa-wallet"></i> Мой баланс</h2>
+            <div class="balance-display">
+                <div class="balance-amount" id="balanceAmount">0</div>
+                <div>виртуальных баллов</div>
             </div>
             
-            <div id="userRoleInfo" style="margin: 15px 0; padding: 10px; background: #e9ecef; border-radius: 10px;"></div>
+            <h3><i class="fas fa-history"></i> История транзакций</h3>
+            <div id="transactionsList" class="table-container mt-2"></div>
+        </div>
+        
+        <!-- ЭКРАН МОИХ ЗАПИСЕЙ -->
+        <div id="myBookingsScreen" class="screen">
+            <h2><i class="fas fa-clipboard-list"></i> Мои записи</h2>
+            <div id="myBookingsList" class="table-container mt-2"></div>
+        </div>
+        
+        <!-- ЭКРАН ОЦЕНОК -->
+        <div id="ratingsScreen" class="screen">
+            <h2><i class="fas fa-star"></i> Мои оценки</h2>
+            <div id="ratingsList" class="table-container mt-2"></div>
+        </div>
+        
+        <!-- ПАНЕЛЬ ТРЕНЕРА -->
+        <div id="trainerScreen" class="screen">
+            <h2><i class="fas fa-user-tie"></i> Панель тренера</h2>
             
-            <div id="trainerSection" class="hidden">
-                <button onclick="createTraining()" class="btn">Создать тренировку</button>
-                <button onclick="viewUsers()" class="btn btn-secondary">Управление пользователями</button>
+            <div class="trainer-actions mt-3">
+                <button onclick="openCreateTrainingModal()" class="btn-primary mb-1">
+                    <i class="fas fa-plus-circle"></i> Создать тренировку
+                </button>
+                <button onclick="openManageTrainingsModal()" class="btn-secondary mb-1">
+                    <i class="fas fa-edit"></i> Управление тренировками
+                </button>
+                <button onclick="openAttendanceModal()" class="btn-primary mb-1">
+                    <i class="fas fa-check-circle"></i> Отметить присутствие
+                </button>
+                <button onclick="openAdjustBalanceModal()" class="btn-secondary mb-1">
+                    <i class="fas fa-coins"></i> Начислить/списать баллы
+                </button>
+                <button onclick="openRateUsersModal()" class="btn-primary mb-1">
+                    <i class="fas fa-star"></i> Выставить оценки
+                </button>
             </div>
             
-            <div id="userSection">
-                <button onclick="viewSchedule()" class="btn">Расписание тренировок</button>
-                <button onclick="viewHistory()" class="btn btn-secondary">История записей</button>
-            </div>
-            
-            <button onclick="logout()" class="btn" style="background: #dc3545; margin-top: 20px;">Выйти</button>
+            <!-- Статистика тренера -->
+            <div id="trainerStats" class="table-container mt-3"></div>
+        </div>
+    </div>
+    
+    <!-- Нижнее меню -->
+    <nav class="bottom-nav">
+        <button class="nav-btn active" data-screen="schedule">
+            <i class="fas fa-calendar-alt"></i>
+            <span>Расписание</span>
+        </button>
+        <button class="nav-btn" data-screen="balance">
+            <i class="fas fa-wallet"></i>
+            <span>Баланс</span>
+        </button>
+        <button class="nav-btn" data-screen="myBookings">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Мои записи</span>
+        </button>
+        <button class="nav-btn" data-screen="ratings">
+            <i class="fas fa-star"></i>
+            <span>Оценки</span>
+        </button>
+        <button class="nav-btn" data-screen="trainer" id="trainerNavBtn">
+            <i class="fas fa-user-tie"></i>
+            <span>Тренер</span>
+        </button>
+    </nav>
+    
+    <!-- МОДАЛЬНЫЕ ОКНА -->
+    
+    <!-- Модалка создания тренировки -->
+    <div id="createTrainingModal" class="modal-overlay">
+        <div class="modal">
+            <h3><i class="fas fa-plus-circle"></i> Новая тренировка</h3>
+            <input type="text" id="trainingTitle" placeholder="Название тренировки" class="form-input mt-2">
+            <input type="datetime-local" id="trainingDate" class="form-input mt-2">
+            <input type="number" id="trainingPrice" placeholder="Стоимость в баллах" class="form-input mt-2">
+            <input type="number" id="trainingMax" placeholder="Максимум участников" class="form-input mt-2">
+            <textarea id="trainingDesc" placeholder="Описание" class="form-input mt-2" rows="3"></textarea>
+            <button onclick="createTraining()" class="btn-primary mt-2">Создать</button>
+            <button onclick="closeModal('createTrainingModal')" class="btn-secondary mt-1">Отмена</button>
+        </div>
+    </div>
+    
+    <!-- Модалка отметки присутствия -->
+    <div id="attendanceModal" class="modal-overlay">
+        <div class="modal">
+            <h3><i class="fas fa-check-circle"></i> Отметить присутствие</h3>
+            <select id="attendanceTraining" class="form-input mt-2">
+                <option value="">Выберите тренировку</option>
+            </select>
+            <div id="attendanceUsers" class="mt-2"></div>
+            <button onclick="saveAttendance()" class="btn-primary mt-2">Сохранить</button>
+            <button onclick="closeModal('attendanceModal')" class="btn-secondary mt-1">Отмена</button>
+        </div>
+    </div>
+    
+    <!-- Модалка начисления баллов -->
+    <div id="balanceModal" class="modal-overlay">
+        <div class="modal">
+            <h3><i class="fas fa-coins"></i> Начисление/списание баллов</h3>
+            <select id="balanceUser" class="form-input mt-2">
+                <option value="">Выберите пользователя</option>
+            </select>
+            <input type="number" id="balanceAmount" placeholder="Сумма (положительная для начисления)" class="form-input mt-2">
+            <textarea id="balanceReason" placeholder="Причина" class="form-input mt-2" rows="2"></textarea>
+            <button onclick="saveBalanceAdjustment()" class="btn-primary mt-2">Сохранить</button>
+            <button onclick="closeModal('balanceModal')" class="btn-secondary mt-1">Отмена</button>
+        </div>
+    </div>
+    
+    <!-- Модалка оценок -->
+    <div id="ratingsModal" class="modal-overlay">
+        <div class="modal">
+            <h3><i class="fas fa-star"></i> Выставление оценок</h3>
+            <select id="ratingTraining" class="form-input mt-2">
+                <option value="">Выберите тренировку</option>
+            </select>
+            <div id="ratingUsers" class="mt-2"></div>
+            <button onclick="saveRatings()" class="btn-primary mt-2">Сохранить оценки</button>
+            <button onclick="closeModal('ratingsModal')" class="btn-secondary mt-1">Отмена</button>
+        </div>
+    </div>
+    
+    <!-- Модалка записи на тренировку -->
+    <div id="registerModal" class="modal-overlay">
+        <div class="modal">
+            <h3><i class="fas fa-calendar-plus"></i> Запись на тренировку</h3>
+            <p id="registerTrainingTitle" class="mb-2"></p>
+            <p>Стоимость: <span id="registerTrainingPrice" class="balance-amount"></span> баллов</p>
+            <p>Ваш баланс: <span id="registerUserBalance" class="balance-amount"></span> баллов</p>
+            <button onclick="confirmRegistration()" class="btn-primary mt-2">Подтвердить запись</button>
+            <button onclick="closeModal('registerModal')" class="btn-secondary mt-1">Отмена</button>
         </div>
     </div>
 
+    <script src="app.js"></script>
     <script>
-        // ============================================
-        // НАСТРОЙКА FIREBASE
-        // ============================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyD5gplXXpP69H0f0WDQehy4jLOOTnw2rZQ",
-            authDomain: "fysm-2d26a.firebaseapp.com",
-            projectId: "fysm-2d26a",
-            storageBucket: "fysm-2d26a.firebasestorage.app",
-            messagingSenderId: "1013209595020",
-            appId: "1:1013209595020:web:5057a63c94dbf29aa4cfa9"
-        };
-        
-        // Инициализация Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        
-        let currentUser = null;
-        let userData = null;
-        
-        // ============================================
-        // ФУНКЦИИ АВТОРИЗАЦИИ
-        // ============================================
-        
-        function showError(message) {
-            const errorDiv = document.getElementById('errorMessage');
-            errorDiv.textContent = message;
-            errorDiv.classList.remove('hidden');
+        // Регистрация Service Worker (опционально)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(() => console.log('SW registered'))
+                    .catch(err => console.log('SW registration failed:', err));
+            });
         }
-        
-        function hideError() {
-            document.getElementById('errorMessage').classList.add('hidden');
-        }
-        
-        function setTestUser() {
-            document.getElementById('email').value = 'user@test.com';
-            document.getElementById('password').value = '123456';
-        }
-        
-        function setTestTrainer() {
-            document.getElementById('email').value = 'trainer@test.com';
-            document.getElementById('password').value = '123456';
-        }
-        
-        async function login() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            
-            if (!email || !password) {
-                showError('Введите email и пароль');
-                return;
-            }
-            
-            hideError();
-            
-            try {
-                await auth.signInWithEmailAndPassword(email, password);
-            } catch (error) {
-                showError('Ошибка входа: ' + error.message);
-            }
-        }
-        
-        async function register() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            
-            if (!email || !password) {
-                showError('Введите email и пароль');
-                return;
-            }
-            
-            if (password.length < 6) {
-                showError('Пароль должен быть минимум 6 символов');
-                return;
-            }
-            
-            hideError();
-            
-            try {
-                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-                const user = userCredential.user;
-                
-                // Создаем запись в базе данных
-                await db.collection('users').doc(user.uid).set({
-                    email: email,
-                    name: email.split('@')[0],
-                    role: 'user',
-                    balance: 100,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                alert('✅ Регистрация успешна! Вам начислено 100 баллов.');
-            } catch (error) {
-                showError('Ошибка регистрации: ' + error.message);
-            }
-        }
-        
-        async function logout() {
-            if (confirm('Выйти из системы?')) {
-                await auth.signOut();
-            }
-        }
-        
-        // ============================================
-        // ЗАГРУЗКА ДАННЫХ ПОЛЬЗОВАТЕЛЯ
-        // ============================================
-        
-        async function loadUserData() {
-            if (!currentUser) return;
-            
-            try {
-                const userDoc = await db.collection('users').doc(currentUser.uid).get();
-                if (userDoc.exists) {
-                    userData = userDoc.data();
-                    updateUI();
-                } else {
-                    // Если записи нет, создаем
-                    await db.collection('users').doc(currentUser.uid).set({
-                        email: currentUser.email,
-                        name: currentUser.displayName || currentUser.email.split('@')[0],
-                        role: 'user',
-                        balance: 100,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    
-                    userData = {
-                        email: currentUser.email,
-                        name: currentUser.displayName || currentUser.email.split('@')[0],
-                        role: 'user',
-                        balance: 100
-                    };
-                    
-                    updateUI();
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки данных:', error);
-            }
-        }
-        
-        function updateUI() {
-            if (!userData) return;
-            
-            // Обновляем приветствие
-            document.getElementById('welcomeMessage').textContent = `Привет, ${userData.name || userData.email}!`;
-            
-            // Обновляем баланс
-            document.getElementById('balanceAmount').textContent = userData.balance || 0;
-            
-            // Показываем секцию тренера
-            if (userData.role === 'trainer') {
-                document.getElementById('trainerSection').classList.remove('hidden');
-                document.getElementById('userSection').classList.add('hidden');
-                document.getElementById('userRoleInfo').textContent = '👨‍🏫 Вы вошли как тренер';
-            } else {
-                document.getElementById('trainerSection').classList.add('hidden');
-                document.getElementById('userSection').classList.remove('hidden');
-                document.getElementById('userRoleInfo').textContent = '👤 Вы вошли как пользователь';
-            }
-        }
-        
-        // ============================================
-        // ФУНКЦИИ ПРИЛОЖЕНИЯ
-        // ============================================
-        
-        async function createTraining() {
-            const title = prompt('Название тренировки:');
-            if (!title) return;
-            
-            const dateStr = prompt('Дата и время (формат: ГГГГ-ММ-ДД ЧЧ:ММ, например: 2024-01-20 19:00):');
-            if (!dateStr) return;
-            
-            const price = prompt('Стоимость в баллах:');
-            if (!price || isNaN(price)) {
-                alert('Введите число');
-                return;
-            }
-            
-            try {
-                const date = new Date(dateStr.replace(' ', 'T'));
-                
-                await db.collection('trainings').add({
-                    title: title,
-                    date: firebase.firestore.Timestamp.fromDate(date),
-                    price: parseInt(price),
-                    trainerId: currentUser.uid,
-                    trainerName: userData.name,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                alert('✅ Тренировка создана!');
-            } catch (error) {
-                alert('Ошибка: ' + error.message);
-            }
-        }
-        
-        async function viewSchedule() {
-            try {
-                const querySnapshot = await db.collection('trainings')
-                    .where('date', '>=', firebase.firestore.Timestamp.now())
-                    .orderBy('date')
-                    .limit(10)
-                    .get();
-                
-                if (querySnapshot.empty) {
-                    alert('Нет предстоящих тренировок');
-                    return;
-                }
-                
-                let message = '📅 Предстоящие тренировки:\n\n';
-                
-                querySnapshot.forEach(doc => {
-                    const training = doc.data();
-                    const date = training.date.toDate();
-                    message += `🏋️ ${training.title}\n`;
-                    message += `📅 ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n`;
-                    message += `💰 ${training.price} баллов\n`;
-                    message += `👨‍🏫 ${training.trainerName || 'Тренер'}\n`;
-                    
-                    if (userData.balance >= training.price) {
-                        message += `✅ <a href="#" onclick="registerForTraining('${doc.id}', ${training.price})">Записаться</a>\n`;
-                    } else {
-                        message += `❌ Недостаточно баллов\n`;
-                    }
-                    
-                    message += `---\n`;
-                });
-                
-                // Создаем модальное окно
-                const modal = document.createElement('div');
-                modal.style.cssText = `
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(0,0,0,0.5);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 1000;
-                `;
-                
-                const modalContent = document.createElement('div');
-                modalContent.style.cssText = `
-                    background: white;
-                    padding: 20px;
-                    border-radius: 15px;
-                    max-width: 500px;
-                    width: 90%;
-                    max-height: 80vh;
-                    overflow-y: auto;
-                `;
-                
-                modalContent.innerHTML = `
-                    <h3>Расписание тренировок</h3>
-                    <div style="white-space: pre-line;">${message}</div>
-                    <button onclick="this.parentElement.parentElement.remove()" style="
-                        background: #667eea;
-                        color: white;
-                        border: none;
-                        padding: 10px 20px;
-                        border-radius: 10px;
-                        margin-top: 15px;
-                        cursor: pointer;
-                    ">Закрыть</button>
-                `;
-                
-                modal.appendChild(modalContent);
-                document.body.appendChild(modal);
-                
-            } catch (error) {
-                alert('Ошибка загрузки расписания: ' + error.message);
-            }
-        }
-        
-        async function registerForTraining(trainingId, price) {
-            if (!confirm(`Записаться за ${price} баллов?`)) return;
-            
-            try {
-                await db.runTransaction(async (transaction) => {
-                    // Проверяем баланс
-                    const userRef = db.collection('users').doc(currentUser.uid);
-                    const userDoc = await transaction.get(userRef);
-                    const currentBalance = userDoc.data().balance;
-                    
-                    if (currentBalance < price) {
-                        throw new Error('Недостаточно баллов');
-                    }
-                    
-                    // Списываем баллы
-                    transaction.update(userRef, {
-                        balance: currentBalance - price
-                    });
-                    
-                    // Создаем запись о регистрации
-                    const regRef = db.collection('registrations').doc();
-                    transaction.set(regRef, {
-                        userId: currentUser.uid,
-                        trainingId: trainingId,
-                        willAttend: true,
-                        charged: true,
-                        registeredAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    
-                    // Создаем транзакцию
-                    const transRef = db.collection('transactions').doc();
-                    transaction.set(transRef, {
-                        userId: currentUser.uid,
-                        trainingId: trainingId,
-                        amount: price,
-                        type: 'debit',
-                        description: 'Запись на тренировку',
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                });
-                
-                alert('✅ Вы успешно записаны!');
-                loadUserData(); // Обновляем баланс
-            } catch (error) {
-                alert('❌ Ошибка: ' + error.message);
-            }
-        }
-        
-        function viewUsers() {
-            alert('Функция "Управление пользователями" в разработке');
-        }
-        
-        function viewHistory() {
-            alert('Функция "История записей" в разработке');
-        }
-        
-        // ============================================
-        // СЛУШАТЕЛЬ СОСТОЯНИЯ АВТОРИЗАЦИИ
-        // ============================================
-        
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                currentUser = user;
-                await loadUserData();
-                
-                // Переключаем экраны
-                document.getElementById('authContent').style.display = 'none';
-                document.getElementById('appContent').style.display = 'block';
-            } else {
-                currentUser = null;
-                userData = null;
-                
-                // Переключаем экраны
-                document.getElementById('authContent').style.display = 'block';
-                document.getElementById('appContent').style.display = 'none';
-                hideError();
-            }
-        });
-        
-        // ============================================
-        // ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ
-        // ============================================
-        
-        document.addEventListener('DOMContentLoaded', function() {
-            // Фокус на поле email
-            document.getElementById('email')?.focus();
-        });
     </script>
 </body>
 </html>
