@@ -682,25 +682,74 @@ async function openAdjustBalanceModal() {
 }
 
 async function saveBalanceAdjustment() {
-    const userId = document.getElementById('balanceUser').value;
-    const amount = parseInt(document.getElementById('balanceAmount').value);
-    const reason = document.getElementById('balanceReason').value;
+    console.log('Функция saveBalanceAdjustment вызвана');
     
-    if (!userId || !amount || isNaN(amount)) return alert('Заполните все поля');
-    if (!reason) return alert('Укажите причину');
+    // 1. БЕЗОПАСНОЕ получение элементов с проверкой
+    const userSelect = document.getElementById('balanceUser');
+    const amountInput = document.getElementById('balanceAmount');
+    const reasonInput = document.getElementById('balanceReason');
     
+    // Проверка, найдены ли элементы на странице
+    if (!userSelect || !amountInput || !reasonInput) {
+        console.error('Ошибка: Не найдены элементы формы!', { userSelect, amountInput, reasonInput });
+        alert('❌ Внутренняя ошибка формы. Перезагрузите страницу.');
+        return;
+    }
+    
+    // 2. Получение значений
+    const userId = userSelect.value;
+    const amountText = amountInput.value;
+    const reason = reasonInput.value.trim(); // Убираем лишние пробелы
+    
+    console.log('Полученные значения:', { userId, amountText, reason });
+    
+    // 3. ВАЛИДАЦИЯ (проверка корректности)
+    if (!userId) {
+        alert('❌ Выберите пользователя из списка');
+        userSelect.focus(); // Курсор на поле с ошибкой
+        return;
+    }
+    
+    // Проверяем, что ввели число (дробные тоже можно)
+    const amount = parseFloat(amountText);
+    if (!amountText || isNaN(amount)) {
+        alert('❌ Введите корректную сумму (число)');
+        amountInput.focus();
+        amountInput.select(); // Выделяем текст для удобства
+        return;
+    }
+    
+    if (!reason) {
+        alert('❌ Укажите причину начисления или списания');
+        reasonInput.focus();
+        return;
+    }
+    
+    // 4. Подтверждение действия
+    const actionType = amount >= 0 ? 'начислить' : 'списать';
+    const confirmMessage = `Подтвердите: ${actionType} ${Math.abs(amount)} баллов пользователю?`;
+    
+    if (!confirm(confirmMessage)) {
+        return; // Пользователь отменил
+    }
+    
+    // 5. СОХРАНЕНИЕ в базу данных (эта часть остаётся без изменений)
     try {
         await db.runTransaction(async (transaction) => {
             const userRef = db.collection('users').doc(userId);
             const userDoc = await transaction.get(userRef);
             
-            if (!userDoc.exists) throw new Error('Пользователь не найден');
+            if (!userDoc.exists) {
+                throw new Error('Пользователь не найден в базе');
+            }
             
-            const currentBalance = userDoc.data().balance;
+            const currentBalance = userDoc.data().balance || 0;
             const newBalance = currentBalance + amount;
             
+            // Обновляем баланс
             transaction.update(userRef, { balance: newBalance });
             
+            // Создаём запись о транзакции
             const transRef = db.collection('transactions').doc();
             transaction.set(transRef, {
                 userId: userId,
@@ -712,14 +761,25 @@ async function saveBalanceAdjustment() {
             });
         });
         
-        alert(`✅ Баланс обновлен на ${amount} баллов`);
+        // 6. УСПЕХ - Очищаем форму и показываем сообщение
+        alert(`✅ Успешно! ${amount >= 0 ? 'Начислено' : 'Списано'} ${Math.abs(amount)} баллов`);
+        
+        // Очищаем поля формы
+        userSelect.selectedIndex = 0; // Возвращаем на первый вариант
+        amountInput.value = '';
+        reasonInput.value = '';
+        
+        // Закрываем модальное окно
         closeModal('balanceModal');
         
-        document.getElementById('balanceAmount').value = '';
-        document.getElementById('balanceReason').value = '';
+        // Обновляем данные пользователя (если нужно)
+        if (userData) {
+            await loadUserData();
+        }
         
     } catch (error) {
-        alert('❌ Ошибка: ' + error.message);
+        console.error('Ошибка сохранения транзакции:', error);
+        alert(`❌ Ошибка сохранения: ${error.message}`);
     }
 }
 
