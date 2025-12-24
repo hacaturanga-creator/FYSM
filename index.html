@@ -3524,7 +3524,7 @@
             for (const doc of registrationsSnapshot.docs) {
                 const registration = doc.data();
                 
-                if (registration.charged && !registration.refunded) {
+                if (registration.charged && !registration.refunded)=> {
                     try {
                         await db.runTransaction(async (transaction) {
                             const userRef = db.collection('users').doc(registration.userId);
