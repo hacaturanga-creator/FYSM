@@ -2055,3 +2055,36 @@ async function loadTrainerStats() {
         console.error('Ошибка:', error);
     }
 }
+// ============================================
+// 🌐 ГЛОБАЛЬНЫЙ ЭКСПОРТ ВСЕХ ФУНКЦИЙ
+// ============================================
+
+window.showScreen = showScreen;
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.register = register;
+window.login = login;
+window.logout = logout;
+window.refreshSchedule = refreshSchedule;
+window.openCreateTrainingModal = openCreateTrainingModal;
+window.createTraining = createTraining;
+window.openAttendanceModal = openAttendanceModal;
+window.saveAttendance = saveAttendance;
+window.openAdjustBalanceModal = openAdjustBalanceModal;
+window.saveBalanceAdjustment = saveBalanceAdjustment;
+window.openRateUsersModal = openRateUsersModal;
+window.saveRatings = saveRatings;
+window.openManageTrainingsModal = openManageTrainingsModal;
+window.editTraining = editTraining;
+window.saveTrainingEdit = saveTrainingEdit;
+window.deleteTraining = deleteTraining;
+window.openRegisterModal = openRegisterModal;
+window.confirmRegistration = confirmRegistration;
+
+// Новые функции
+window.cancelTraining = cancelTraining;
+window.cancelUserRegistration = cancelUserRegistration;
+window.exportAttendanceToExcel = exportAttendanceToExcel;
+window.exportFinancialToExcel = exportFinancialToExcel;
+window.viewTrainingDetails = viewTrainingDetails;
+window.requestRefund = requestRefund;
