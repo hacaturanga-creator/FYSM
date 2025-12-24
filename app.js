@@ -444,81 +444,190 @@ async function createTraining() {
 }
 
 async function openAttendanceModal() {
-    if (userData.role !== 'trainer') return alert('Только тренер');
+    console.log('Функция openAttendanceModal вызвана. Роль пользователя:', userData?.role);
     
+    if (userData?.role !== 'trainer') {
+        alert('❌ Только тренер может отмечать присутствие.');
+        return;
+    }
+
     try {
+        console.log('Пытаюсь загрузить тренировки тренера...');
+        
+        // УПРОЩЕННЫЙ ЗАПРОС: Берем все тренировки тренера без сложных условий по дате
         const trainingsSnapshot = await db.collection('trainings')
             .where('trainerId', '==', currentUser.uid)
-            .where('date', '<=', firebase.firestore.Timestamp.now())
-            .limit(10)
-            .get();
-        
+            .get(); // Убираем .limit(10) для надежности
+
+        console.log('Запрос выполнен. Найдено тренировок:', trainingsSnapshot.size);
+
         const select = document.getElementById('attendanceTraining');
-        select.innerHTML = '<option value="">Выберите тренировку</option>';
+        if (!select) {
+            console.error('Ошибка: Не найден элемент select с id="attendanceTraining"');
+            alert('Внутренняя ошибка интерфейса. Элемент выбора тренировки не найден.');
+            return;
+        }
         
-        trainingsSnapshot.forEach(doc => {
-            const training = doc.data();
-            const date = training.date.toDate();
+        select.innerHTML = '<option value="">Выберите тренировку для отметки</option>';
+
+        if (trainingsSnapshot.empty) {
+            console.log('У тренера нет созданных тренировок.');
             const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = `${training.title} (${date.toLocaleDateString()})`;
+            option.textContent = 'У вас нет тренировок';
+            option.disabled = true;
+            select.appendChild(option);
+            alert('⚠️ У вас еще нет созданных тренировок. Сначала создайте тренировку.');
+            return;
+        }
+
+        // Преобразуем данные в массив и сортируем на клиенте (по убыванию даты)
+        const trainingsList = [];
+        trainingsSnapshot.forEach(doc => {
+            trainingsList.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        // Сортировка по дате (сначала новые)
+        trainingsList.sort((a, b) => b.date?.toDate() - a.date?.toDate());
+
+        // Заполняем выпадающий список
+        trainingsList.forEach(training => {
+            const date = training.date?.toDate() ? training.date.toDate().toLocaleDateString('ru-RU') : 'Дата не указана';
+            const option = document.createElement('option');
+            option.value = training.id;
+            option.textContent = `${training.title || 'Без названия'} (${date})`;
+            // Можно добавить пометку для прошедших тренировок
+            const now = new Date();
+            if (training.date?.toDate() < now) {
+                option.textContent += ' [Прошедшая]';
+            }
             select.appendChild(option);
         });
-        
+
+        console.log('Выпадающий список тренировок заполнен.');
+
+        // ОБНОВЛЕННЫЙ обработчик выбора тренировки
         select.onchange = async function() {
-            if (!this.value) return;
-            
             const trainingId = this.value;
+            console.log('Выбрана тренировка с ID:', trainingId);
+            
             const usersDiv = document.getElementById('attendanceUsers');
-            usersDiv.innerHTML = '<p>Загрузка...</p>';
-            
-            const registrationsSnapshot = await db.collection('registrations')
-                .where('trainingId', '==', trainingId)
-                .get();
-            
-            if (registrationsSnapshot.empty) {
-                usersDiv.innerHTML = '<p>Нет записей</p>';
+            if (!usersDiv) {
+                console.error('Ошибка: Не найден элемент div с id="attendanceUsers"');
                 return;
             }
             
-            let html = '<h4>Участники:</h4>';
-            
-            const userPromises = [];
-            const registrations = [];
-            
-            registrationsSnapshot.forEach(doc => {
-                const reg = doc.data();
-                reg.id = doc.id;
-                registrations.push(reg);
-                userPromises.push(db.collection('users').doc(reg.userId).get());
-            });
-            
-            const userSnapshots = await Promise.all(userPromises);
-            
-            registrations.forEach((reg, index) => {
-                const user = userSnapshots[index].exists ? userSnapshots[index].data() : {};
-                const checked = reg.attended ? 'checked' : '';
-                
-                html += `
-                    <div style="display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;">
-                        <input type="checkbox" id="user_${reg.id}" ${checked} data-registration="${reg.id}" data-user="${reg.userId}">
-                        <label for="user_${reg.id}" style="flex: 1;">
-                            <strong>${user.name || user.email || 'Неизвестный'}</strong>
-                            ${reg.willAttend ? '✅ Буду присутствовать' : '❌ Не придет'}
-                        </label>
-                    </div>
+            if (!trainingId) {
+                usersDiv.innerHTML = '<p style="color: #666; padding: 1rem; text-align: center;">Выберите тренировку из списка.</p>';
+                return;
+            }
+
+            usersDiv.innerHTML = '<p style="color: #666; padding: 1rem; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Загрузка списка записавшихся...</p>';
+
+            try {
+                // Загружаем записи на выбранную тренировку
+                const registrationsSnapshot = await db.collection('registrations')
+                    .where('trainingId', '==', trainingId)
+                    .get();
+
+                console.log('На тренировку записано участников:', registrationsSnapshot.size);
+
+                if (registrationsSnapshot.empty) {
+                    usersDiv.innerHTML = '<p style="color: #dc3545; padding: 1rem; text-align: center;">На эту тренировку пока никто не записался.</p>';
+                    return;
+                }
+
+                let html = '<h4 style="margin-bottom: 1rem;">Отметьте присутствующих:</h4>';
+                const userPromises = [];
+                const registrations = [];
+
+                // Собираем данные о регистрациях и пользователях
+                registrationsSnapshot.forEach(doc => {
+                    const reg = doc.data();
+                    reg.id = doc.id;
+                    registrations.push(reg);
+                    userPromises.push(db.collection('users').doc(reg.userId).get());
+                });
+
+                const userSnapshots = await Promise.all(userPromises);
+                console.log('Данные пользователей загружены.');
+
+                // Формируем список для отметки
+                registrations.forEach((reg, index) => {
+                    const userDoc = userSnapshots[index];
+                    const user = userDoc?.exists ? userDoc.data() : {};
+                    const userName = user.name || user.email || `Участник #${index+1}`;
+                    const userEmail = user.email ? `(${user.email})` : '';
+                    
+                    // Проверяем, отмечено ли присутствие ранее
+                    const isChecked = reg.attended === true;
+                    const checkStatus = reg.attended ? ' (уже отмечен)' : '';
+
+                    html += `
+                        <div style="display: flex; align-items: center; gap: 12px; margin: 12px 0; padding: 12px; background: ${isChecked ? '#e8f5e9' : '#f8f9fa'}; border-radius: 10px; border-left: 4px solid ${isChecked ? '#28a745' : '#6c757d'};">
+                            <input type="checkbox" 
+                                   id="attend_${reg.id}" 
+                                   ${isChecked ? 'checked disabled' : ''}
+                                   data-registration="${reg.id}" 
+                                   data-user="${reg.userId}"
+                                   style="transform: scale(1.3); cursor: pointer;">
+                            <label for="attend_${reg.id}" style="flex: 1; cursor: pointer;">
+                                <div style="font-weight: 600;">${userName} ${userEmail}</div>
+                                <div style="font-size: 0.9em; color: #666; margin-top: 4px;">
+                                    <span>Статус: ${reg.willAttend ? '✅ Подтвердил участие' : '❓ Не подтвердил'}</span>
+                                    ${checkStatus ? `<span style="color: #28a745; margin-left: 10px;">${checkStatus}</span>` : ''}
+                                </div>
+                            </label>
+                        </div>
+                    `;
+                });
+
+                // Добавляем кнопку сохранения, если есть кого отмечать
+                const hasUnmarked = registrations.some(reg => !reg.attended);
+                if (hasUnmarked) {
+                    html += `
+                        <div style="margin-top: 20px; text-align: center;">
+                            <button onclick="saveAttendance()" 
+                                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                           color: white; 
+                                           border: none; 
+                                           padding: 12px 30px; 
+                                           border-radius: 25px; 
+                                           font-weight: 600; 
+                                           cursor: pointer;">
+                                <i class="fas fa-save"></i> Сохранить отметки присутствия
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    html += `<p style="color: #28a745; padding: 1rem; text-align: center; font-weight: 600;"><i class="fas fa-check-circle"></i> Все участники уже отмечены как присутствовавшие.</p>`;
+                }
+
+                usersDiv.innerHTML = html;
+                console.log('Список участников для отметки отображен.');
+
+            } catch (loadError) {
+                console.error('Ошибка загрузки данных о записях:', loadError);
+                usersDiv.innerHTML = `
+                    <p style="color: #dc3545; padding: 1rem; text-align: center;">
+                        <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки данных.
+                    </p>
+                    <p style="color: #666; font-size: 0.9em; text-align: center;">${loadError.message}</p>
                 `;
-            });
-            
-            usersDiv.innerHTML = html;
+            }
         };
-        
+
+        // Открываем модальное окно
         openModal('attendanceModal');
+        console.log('Модальное окно "Отметить присутствие" открыто.');
+
     } catch (error) {
-        alert('Ошибка: ' + error.message);
+        console.error('Критическая ошибка в openAttendanceModal:', error);
+        alert('❌ Не удалось загрузить список тренировок. Ошибка: ' + error.message);
     }
 }
-
 async function saveAttendance() {
     const trainingId = document.getElementById('attendanceTraining').value;
     if (!trainingId) return alert('Выберите тренировку');
