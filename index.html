@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💪 FITBOOK - Запись на тренировки</title>
+    <meta name="description" content="Бесплатное приложение для записи на тренировки">
+    
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Иконки -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Стили -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Иконка сайта -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💪</text></svg>">
+</head>
+<body>
+    <!-- Навигация -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-dumbbell"></i> FITBOOK
+        </div>
+        <div class="nav-user">
+            <span id="userName">Гость</span>
+            <button id="logoutBtn" class="btn-small" style="display:none;">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </nav>
+    
+    <!-- Главный контент -->
+    <main id="mainContent">
+        <!-- Экран входа -->
+        <section id="loginScreen" class="screen active">
+            <div class="auth-card">
+                <div class="app-icon">
+                    <i class="fas fa-dumbbell"></i>
+                </div>
+                <h2>Добро пожаловать!</h2>
+                <p class="subtitle">Система записи на тренировки</p>
+                
+                <div class="form-group">
+                    <input type="email" id="loginEmail" placeholder="Ваш email" class="form-input">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPassword" placeholder="Пароль" class="form-input">
+                </div>
+                
+                <button id="loginBtn" class="btn-primary">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+                <button id="registerBtn" class="btn-secondary">
+                    <i class="fas fa-user-plus"></i> Регистрация
+                </button>
+                
+                <div class="demo-accounts">
+                    <h4><i class="fas fa-vial"></i> Тестовые аккаунты:</h4>
+                    <p><strong>👤 Пользователь:</strong> user@test.com / 123456</p>
+                    <p><strong>👨‍🏫 Тренер:</strong> trainer@test.com / 123456</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Экран расписания -->
+        <section id="scheduleScreen" class="screen">
+            <h2><i class="fas fa-calendar-alt"></i> Расписание</h2>
+            <div id="trainingsList" class="cards-container">
+                <!-- Тренировки будут здесь -->
+            </div>
+            <button id="createTrainingBtn" class="btn-float" style="display:none;">
+                <i class="fas fa-plus"></i>
+            </button>
+        </section>
+        
+        <!-- Экран баланса -->
+        <section id="balanceScreen" class="screen">
+            <h2><i class="fas fa-wallet"></i> Мой баланс</h2>
+            <div class="balance-display">
+                <div class="balance-amount" id="balanceAmount">0</div>
+                <div class="balance-label">виртуальных баллов</div>
+            </div>
+            <h3><i class="fas fa-history"></i> История операций</h3>
+            <div id="transactionsList" class="transactions-container">
+                <!-- Транзакции будут здесь -->
+            </div>
+        </section>
+        
+        <!-- Экран тренера -->
+        <section id="trainerScreen" class="screen">
+            <h2><i class="fas fa-user-tie"></i> Панель тренера</h2>
+            <div class="trainer-actions">
+                <button id="btnCreateTraining" class="action-card">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Создать тренировку</span>
+                </button>
+                <button id="btnManageUsers" class="action-card">
+                    <i class="fas fa-users"></i>
+                    <span>Управление пользователями</span>
+                </button>
+                <button id="btnMarkAttendance" class="action-card">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Отметить присутствие</span>
+                </button>
+                <button id="btnAdjustBalance" class="action-card">
+                    <i class="fas fa-coins"></i>
+                    <span>Начислить баллы</span>
+                </button>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Нижнее меню -->
+    <nav class="bottom-nav" style="display:none;">
+        <button class="nav-btn active" data-screen="schedule">
+            <i class="fas fa-calendar-alt"></i>
+            <span>Расписание</span>
+        </button>
+        <button class="nav-btn" data-screen="balance">
+            <i class="fas fa-wallet"></i>
+            <span>Баланс</span>
+        </button>
+        <button class="nav-btn" data-screen="trainer" id="trainerNavBtn">
+            <i class="fas fa-user-tie"></i>
+            <span>Тренер</span>
+        </button>
+    </nav>
+    
+    <!-- Модальные окна -->
+    <div id="modalOverlay" class="modal-overlay" style="display:none;"></div>
+    
+    <!-- Модалка создания тренировки -->
+    <div id="trainingModal" class="modal" style="display:none;">
+        <h3><i class="fas fa-plus-circle"></i> Новая тренировка</h3>
+        <input type="text" id="trainingTitle" placeholder="Название" class="modal-input">
+        <input type="datetime-local" id="trainingDate" class="modal-input">
+        <input type="number" id="trainingPrice" placeholder="Стоимость (баллов)" class="modal-input">
+        <input type="number" id="trainingMax" placeholder="Максимум участников" class="modal-input">
+        <textarea id="trainingDesc" placeholder="Описание" class="modal-input"></textarea>
+        <button id="saveTrainingBtn" class="btn-primary">Создать</button>
+        <button id="cancelTrainingBtn" class="btn-secondary">Отмена</button>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Регистрация Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(() => console.log('SW registered'))
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>
