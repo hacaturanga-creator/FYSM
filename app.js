@@ -31,6 +31,57 @@ const TRAININGS_PER_PAGE = 10;
 // 🔐 ОСНОВНЫЕ ФУНКЦИИ АВТОРИЗАЦИИ
 // ============================================
 
+// Вход
+async function login() {
+    console.log('Функция login вызвана');
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    if (!email || !password) return alert('Введите email и пароль');
+    
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+        console.log('Успешный вход');
+    } catch (error) {
+        console.error('Ошибка входа:', error);
+        alert('❌ Ошибка: ' + error.message);
+    }
+}
+
+// Регистрация
+async function register() {
+    console.log('Функция register вызвана');
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    if (!email || !password) return alert('Введите email и пароль');
+    if (password.length < 6) return alert('Пароль минимум 6 символов');
+    
+    try {
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        
+        await db.collection('users').doc(user.uid).set({
+            name: email.split('@')[0],
+            email: email,
+            role: 'user',
+            balance: 100,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        alert('✅ Регистрация успешна! 100 баллов начислено.');
+        console.log('Успешная регистрация');
+    } catch (error) {
+        console.error('Ошибка регистрации:', error);
+        alert('❌ Ошибка: ' + error.message);
+    }
+}
+
+// Выход
+async function logout() {
+    if (confirm('Выйти?')) await auth.signOut();
+}
+
 // Показать/скрыть экраны
 function showScreen(screenName) {
     document.querySelectorAll('.screen').forEach(screen => {
@@ -66,12 +117,6 @@ function showScreen(screenName) {
                 }
             }, 500);
             break;
-        case 'admin':
-            if (typeof loadAdminStats === 'function') {
-                loadAdminStats();
-                loadAdminUsers();
-            }
-            break;
     }
 }
 
@@ -82,51 +127,6 @@ function openModal(modalId) {
 
 function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
-}
-
-// Регистрация
-async function register() {
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    
-    if (!email || !password) return alert('Введите email и пароль');
-    if (password.length < 6) return alert('Пароль минимум 6 символов');
-    
-    try {
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        const user = userCredential.user;
-        
-        await db.collection('users').doc(user.uid).set({
-            name: email.split('@')[0],
-            email: email,
-            role: 'user',
-            balance: 100,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        alert('✅ Регистрация успешна! 100 баллов начислено.');
-    } catch (error) {
-        alert('❌ Ошибка: ' + error.message);
-    }
-}
-
-// Вход
-async function login() {
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    
-    if (!email || !password) return alert('Введите email и пароль');
-    
-    try {
-        await auth.signInWithEmailAndPassword(email, password);
-    } catch (error) {
-        alert('❌ Ошибка: ' + error.message);
-    }
-}
-
-// Выход
-async function logout() {
-    if (confirm('Выйти?')) await auth.signOut();
 }
 
 // Загрузка данных пользователя
@@ -164,15 +164,6 @@ function updateUI() {
 // ============================================
 // 📄 ПАГИНАЦИЯ И ФИЛЬТРАЦИЯ ТРЕНИРОВОК
 // ============================================
-
-// Фильтры
-let currentFilters = {
-    search: '',
-    date: '',
-    price: '',
-    trainer: '',
-    status: ''
-};
 
 // Загрузка тренировок с фильтрами
 async function loadTrainings(loadMore = false) {
@@ -309,21 +300,21 @@ function addFiltersToSchedule() {
     filterPanel.id = 'trainingsFilters';
     filterPanel.style.cssText = `
         background: white;
-        padding: 15px;
-        border-radius: 10px;
+        padding: 20px;
+        border-radius: 15px;
         margin-bottom: 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
     `;
     
     filterPanel.innerHTML = `
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <div style="flex: 1; min-width: 200px;">
                 <input type="text" id="searchTrainings" placeholder="Поиск тренировок..." 
-                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                       style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
             </div>
             
             <div>
-                <select id="filterDate" style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <select id="filterDate" style="padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
                     <option value="">Все даты</option>
                     <option value="today">Сегодня</option>
                     <option value="tomorrow">Завтра</option>
@@ -333,7 +324,7 @@ function addFiltersToSchedule() {
             </div>
             
             <div>
-                <select id="filterPrice" style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <select id="filterPrice" style="padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
                     <option value="">Любая цена</option>
                     <option value="free">Бесплатные</option>
                     <option value="0-100">0-100 баллов</option>
@@ -346,9 +337,11 @@ function addFiltersToSchedule() {
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
                 border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
+                padding: 12px 24px;
+                border-radius: 8px;
                 cursor: pointer;
+                font-size: 16px;
+                font-weight: 600;
             ">
                 <i class="fas fa-filter"></i> Применить
             </button>
@@ -357,15 +350,17 @@ function addFiltersToSchedule() {
                 background: #6c757d;
                 color: white;
                 border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
+                padding: 12px 24px;
+                border-radius: 8px;
                 cursor: pointer;
+                font-size: 16px;
+                font-weight: 600;
             ">
                 <i class="fas fa-times"></i> Сбросить
             </button>
         </div>
         
-        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;" id="activeFilters">
+        <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;" id="activeFilters">
         </div>
     `;
     
@@ -411,12 +406,13 @@ async function applyFilters() {
         badge.style.cssText = `
             background: #e3f2fd;
             color: #1976d2;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 0.85em;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 8px;
+            margin: 5px;
         `;
         badge.innerHTML = `${filter} <i class="fas fa-times" style="cursor: pointer;" onclick="removeFilter('${filter.split(':')[0].trim()}')"></i>`;
         activeFiltersContainer.appendChild(badge);
@@ -796,388 +792,926 @@ function addNotificationsButton() {
 }
 
 // ============================================
-// 👑 АДМИН-ПАНЕЛЬ
+// 💰 БАЛАНС И ТРАНЗАКЦИИ
 // ============================================
 
-// Проверка прав админа
-function isAdmin() {
-    return userData && userData.role === 'admin';
-}
-
-// Загрузка админ-панели
-async function loadAdminPanel() {
-    if (!isAdmin()) return;
-    
-    const adminScreen = document.createElement('div');
-    adminScreen.id = 'adminScreen';
-    adminScreen.className = 'screen';
-    adminScreen.innerHTML = `
-        <div class="container">
-            <div class="header">
-                <h2><i class="fas fa-crown"></i> Админ-панель</h2>
-                <button onclick="showScreen('schedule')" class="btn-secondary">
-                    <i class="fas fa-arrow-left"></i> Назад
-                </button>
-            </div>
-            
-            <div class="content">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #4CAF50;">
-                            <i class="fas fa-users"></i>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-value" id="totalUsers">0</div>
-                            <div class="stat-label">Всего пользователей</div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #2196F3;">
-                            <i class="fas fa-dumbbell"></i>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-value" id="totalTrainings">0</div>
-                            <div class="stat-label">Тренировок всего</div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #FF9800;">
-                            <i class="fas fa-coins"></i>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-value" id="totalBalance">0</div>
-                            <div class="stat-label">Всего баллов в системе</div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #9C27B0;">
-                            <i class="fas fa-calendar-check"></i>
-                        </div>
-                        <div class="stat-info">
-                            <div class="stat-value" id="totalRegistrations">0</div>
-                            <div class="stat-label">Всего записей</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="tabs" style="margin-top: 30px;">
-                    <div class="tab-buttons">
-                        <button class="tab-btn active" onclick="switchAdminTab('users')">
-                            <i class="fas fa-users"></i> Пользователи
-                        </button>
-                        <button class="tab-btn" onclick="switchAdminTab('trainings')">
-                            <i class="fas fa-dumbbell"></i> Тренировки
-                        </button>
-                        <button class="tab-btn" onclick="switchAdminTab('transactions')">
-                            <i class="fas fa-exchange-alt"></i> Транзакции
-                        </button>
-                        <button class="tab-btn" onclick="switchAdminTab('reports')">
-                            <i class="fas fa-chart-bar"></i> Отчеты
-                        </button>
-                    </div>
-                    
-                    <div class="tab-content">
-                        <div id="adminTabUsers" class="tab-pane active">
-                            <div class="table-container">
-                                <table id="usersTable">
-                                    <thead>
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Имя</th>
-                                            <th>Email</th>
-                                            <th>Роль</th>
-                                            <th>Баланс</th>
-                                            <th>Дата регистрации</th>
-                                            <th>Действия</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="usersTableBody">
-                                        <!-- Данные загружаются динамически -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <div id="adminTabTrainings" class="tab-pane">
-                            <div id="adminTrainingsList"></div>
-                        </div>
-                        
-                        <div id="adminTabTransactions" class="tab-pane">
-                            <div id="adminTransactionsList"></div>
-                        </div>
-                        
-                        <div id="adminTabReports" class="tab-pane">
-                            <div id="adminReports"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.querySelector('.screens').appendChild(adminScreen);
-}
-
-// Загрузка статистики админа
-async function loadAdminStats() {
+async function loadTransactions() {
     try {
-        const usersSnapshot = await db.collection('users').get();
-        document.getElementById('totalUsers').textContent = usersSnapshot.size;
-        
-        const trainingsSnapshot = await db.collection('trainings').get();
-        document.getElementById('totalTrainings').textContent = trainingsSnapshot.size;
-        
-        let totalBalance = 0;
-        usersSnapshot.forEach(doc => {
-            const user = doc.data();
-            totalBalance += user.balance || 0;
-        });
-        document.getElementById('totalBalance').textContent = totalBalance;
-        
-        const registrationsSnapshot = await db.collection('registrations').get();
-        document.getElementById('totalRegistrations').textContent = registrationsSnapshot.size;
-        
-    } catch (error) {
-        console.error('Ошибка загрузки статистики админа:', error);
-    }
-}
-
-// Загрузка пользователей для админа
-async function loadAdminUsers() {
-    try {
-        const usersSnapshot = await db.collection('users')
+        const querySnapshot = await db.collection('transactions')
+            .where('userId', '==', currentUser.uid)
             .orderBy('createdAt', 'desc')
-            .limit(100)
-            .get();
-        
-        const tbody = document.getElementById('usersTableBody');
-        tbody.innerHTML = '';
-        
-        usersSnapshot.forEach(doc => {
-            const user = doc.data();
-            const createdAt = user.createdAt?.toDate() || new Date();
-            
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${doc.id.substring(0, 8)}...</td>
-                <td>${user.name || '-'}</td>
-                <td>${user.email || '-'}</td>
-                <td>
-                    <select class="role-select" data-user="${doc.id}" style="padding: 5px; border-radius: 3px; border: 1px solid #ddd;">
-                        <option value="user" ${user.role === 'user' ? 'selected' : ''}>Пользователь</option>
-                        <option value="trainer" ${user.role === 'trainer' ? 'selected' : ''}>Тренер</option>
-                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Админ</option>
-                    </select>
-                </td>
-                <td>
-                    <input type="number" value="${user.balance || 0}" 
-                           data-user="${doc.id}" 
-                           class="balance-input"
-                           style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 3px;">
-                </td>
-                <td>${createdAt.toLocaleDateString()}</td>
-                <td>
-                    <button onclick="editUserAsAdmin('${doc.id}')" class="btn-sm" style="margin-right: 5px;">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button onclick="deleteUserAsAdmin('${doc.id}')" class="btn-sm btn-danger">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            `;
-            
-            tbody.appendChild(row);
-        });
-        
-        // Обработчики событий
-        document.querySelectorAll('.role-select').forEach(select => {
-            select.addEventListener('change', async (e) => {
-                const userId = e.target.dataset.user;
-                const newRole = e.target.value;
-                
-                if (confirm(`Изменить роль пользователя на "${newRole}"?`)) {
-                    try {
-                        await db.collection('users').doc(userId).update({
-                            role: newRole
-                        });
-                        alert('✅ Роль обновлена');
-                    } catch (error) {
-                        alert('❌ Ошибка: ' + error.message);
-                    }
-                }
-            });
-        });
-        
-        document.querySelectorAll('.balance-input').forEach(input => {
-            input.addEventListener('change', async (e) => {
-                const userId = e.target.dataset.user;
-                const newBalance = parseInt(e.target.value);
-                
-                if (isNaN(newBalance)) {
-                    alert('Введите корректное число');
-                    return;
-                }
-                
-                if (confirm(`Изменить баланс пользователя на ${newBalance}?`)) {
-                    try {
-                        await db.collection('users').doc(userId).update({
-                            balance: newBalance
-                        });
-                        
-                        await db.collection('transactions').add({
-                            userId: userId,
-                            amount: newBalance,
-                            type: 'admin_adjustment',
-                            description: 'Корректировка баланса администратором',
-                            createdBy: currentUser.uid,
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        
-                        alert('✅ Баланс обновлен');
-                    } catch (error) {
-                        alert('❌ Ошибка: ' + error.message);
-                    }
-                }
-            });
-        });
-        
-    } catch (error) {
-        console.error('Ошибка загрузки пользователей:', error);
-        document.getElementById('usersTableBody').innerHTML = `
-            <tr>
-                <td colspan="7" style="text-align: center; color: #f44336;">
-                    Ошибка загрузки данных
-                </td>
-            </tr>
-        `;
-    }
-}
-
-// Переключение вкладок админ-панели
-async function switchAdminTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    event.target.classList.add('active');
-    
-    document.querySelectorAll('.tab-pane').forEach(pane => {
-        pane.classList.remove('active');
-    });
-    
-    document.getElementById(`adminTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
-    
-    switch(tabName) {
-        case 'users':
-            await loadAdminUsers();
-            break;
-        case 'trainings':
-            await loadAdminTrainings();
-            break;
-        case 'transactions':
-            await loadAdminTransactions();
-            break;
-        case 'reports':
-            await loadAdminReports();
-            break;
-    }
-}
-
-// Загрузка тренировок для админа
-async function loadAdminTrainings() {
-    try {
-        const trainingsSnapshot = await db.collection('trainings')
-            .orderBy('date', 'desc')
             .limit(50)
             .get();
         
-        const container = document.getElementById('adminTrainingsList');
+        const container = document.getElementById('transactionsList');
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<p class="text-center">Нет транзакций</p>';
+            return;
+        }
+        
         let html = `
-            <div style="margin-bottom: 20px;">
-                <button onclick="adminCreateTraining()" class="btn-primary">
-                    <i class="fas fa-plus"></i> Создать тренировку
-                </button>
-            </div>
-            
-            <table style="width: 100%; border-collapse: collapse;">
+            <table>
                 <thead>
-                    <tr style="background: #f8f9fa;">
-                        <th style="padding: 12px; text-align: left;">Название</th>
-                        <th style="padding: 12px; text-align: left;">Дата</th>
-                        <th style="padding: 12px; text-align: left;">Тренер</th>
-                        <th style="padding: 12px; text-align: left;">Цена</th>
-                        <th style="padding: 12px; text-align: left;">Статус</th>
-                        <th style="padding: 12px; text-align: left;">Участники</th>
-                        <th style="padding: 12px; text-align: left;">Действия</th>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Описание</th>
+                        <th>Сумма</th>
+                        <th>Тип</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
         
-        trainingsSnapshot.forEach(doc => {
-            const training = doc.data();
-            const date = training.date?.toDate() || new Date();
+        querySnapshot.forEach(doc => {
+            const trans = doc.data();
+            const date = trans.createdAt?.toDate() || new Date();
+            const typeClass = trans.type === 'credit' ? 'status-success' : 'status-danger';
             
             html += `
-                <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 10px;">${training.title || '-'}</td>
-                    <td style="padding: 10px;">${date.toLocaleDateString()}</td>
-                    <td style="padding: 10px;">${training.trainerName || '-'}</td>
-                    <td style="padding: 10px;">${training.price || 0} баллов</td>
-                    <td style="padding: 10px;">
-                        ${training.cancelled ? 
-                            '<span style="color: #f44336;">Отменена</span>' : 
-                            '<span style="color: #4CAF50;">Активна</span>'}
-                    </td>
-                    <td style="padding: 10px;">
-                        <button onclick="viewTrainingParticipants('${doc.id}')" class="btn-sm">
-                            <i class="fas fa-users"></i> Показать
-                        </button>
-                    </td>
-                    <td style="padding: 10px;">
-                        <button onclick="editTrainingAsAdmin('${doc.id}')" class="btn-sm" style="margin-right: 5px;">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button onclick="deleteTrainingAsAdmin('${doc.id}')" class="btn-sm btn-danger">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
+                <tr>
+                    <td>${date.toLocaleDateString()}</td>
+                    <td>${trans.description || '-'}</td>
+                    <td>${trans.amount}</td>
+                    <td><span class="status-badge ${typeClass}">${trans.type === 'credit' ? 'Начисление' : 'Списание'}</span></td>
                 </tr>
             `;
         });
         
         html += `</tbody></table>`;
         container.innerHTML = html;
-        
     } catch (error) {
-        console.error('Ошибка загрузки тренировок:', error);
-        document.getElementById('adminTrainingsList').innerHTML = '<p style="color: #f44336;">Ошибка загрузки данных</p>';
+        console.error('Ошибка загрузки транзакций:', error);
+        document.getElementById('transactionsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
     }
 }
 
-// Добавление кнопки админа
-function addAdminButton() {
-    if (!isAdmin()) return;
-    
-    const bottomNav = document.querySelector('.bottom-nav');
-    
-    const adminBtn = document.createElement('div');
-    adminBtn.className = 'nav-btn';
-    adminBtn.innerHTML = `
-        <i class="fas fa-crown"></i>
-        <span>Админ</span>
-    `;
-    
-    adminBtn.onclick = () => {
-        if (!document.getElementById('adminScreen')) {
-            loadAdminPanel();
+// ============================================
+// 📝 МОИ ЗАПИСИ
+// ============================================
+
+async function loadMyBookings() {
+    try {
+        const querySnapshot = await db.collection('registrations')
+            .where('userId', '==', currentUser.uid)
+            .get();
+        
+        const container = document.getElementById('myBookingsList');
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<p class="text-center">Нет записей</p>';
+            return;
         }
-        showScreen('admin');
-    };
+        
+        const registrations = [];
+        querySnapshot.forEach(doc => {
+            const reg = doc.data();
+            reg.id = doc.id;
+            registrations.push(reg);
+        });
+        
+        const trainingPromises = registrations.map(reg => 
+            db.collection('trainings').doc(reg.trainingId).get()
+        );
+        
+        const trainingSnapshots = await Promise.all(trainingPromises);
+        
+        let html = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Тренировка</th>
+                        <th>Дата</th>
+                        <th>Стоимость</th>
+                        <th>Статус</th>
+                        <th>Присутствие</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        registrations.forEach((reg, index) => {
+            const training = trainingSnapshots[index].exists ? trainingSnapshots[index].data() : {};
+            const date = training.date?.toDate() || new Date();
+            const statusClass = reg.attended ? 'status-success' : 'status-warning';
+            const attendanceClass = reg.attended ? 'status-success' : 'status-danger';
+            
+            html += `
+                <tr>
+                    <td>${training.title || 'Неизвестно'}</td>
+                    <td>${date.toLocaleDateString()}</td>
+                    <td>${training.price || 0} баллов</td>
+                    <td><span class="status-badge ${statusClass}">${reg.charged ? 'Оплачено' : 'Не оплачено'}</span></td>
+                    <td><span class="status-badge ${attendanceClass}">${reg.attended ? 'Присутствовал' : 'Не отмечено'}</span></td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Ошибка загрузки записей:', error);
+        document.getElementById('myBookingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
+    }
+}
+
+// ============================================
+// ⭐ ОЦЕНКИ
+// ============================================
+
+async function loadMyRatings() {
+    try {
+        const querySnapshot = await db.collection('ratings')
+            .where('userId', '==', currentUser.uid)
+            .get();
+        
+        const container = document.getElementById('ratingsList');
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<p class="text-center">Нет оценок</p>';
+            return;
+        }
+        
+        const ratings = [];
+        querySnapshot.forEach(doc => {
+            const rating = doc.data();
+            rating.id = doc.id;
+            ratings.push(rating);
+        });
+        
+        const trainingPromises = ratings.map(rating => 
+            db.collection('trainings').doc(rating.trainingId).get()
+        );
+        
+        const trainingSnapshots = await Promise.all(trainingPromises);
+        
+        let html = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Тренировка</th>
+                        <th>Дата</th>
+                        <th>Оценка</th>
+                        <th>Комментарий</th>
+                        <th>Тренер</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        ratings.forEach((rating, index) => {
+            const training = trainingSnapshots[index].exists ? trainingSnapshots[index].data() : {};
+            const date = rating.createdAt?.toDate() || new Date();
+            const stars = '★'.repeat(rating.score) + '☆'.repeat(5 - rating.score);
+            
+            html += `
+                <tr>
+                    <td>${training.title || 'Неизвестно'}</td>
+                    <td>${date.toLocaleDateString()}</td>
+                    <td><span style="color: gold; font-size: 1.2em;">${stars}</span> (${rating.score}/5)</td>
+                    <td>${rating.comment || 'Нет комментария'}</td>
+                    <td>${rating.trainerName || 'Тренер'}</td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Ошибка загрузки оценок:', error);
+        document.getElementById('ratingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
+    }
+}
+
+// ============================================
+// 👨‍🏫 ФУНКЦИИ ТРЕНЕРА
+// ============================================
+
+async function openAttendanceModal() {
+    console.log('Функция openAttendanceModal вызвана. Роль пользователя:', userData?.role);
     
-    bottomNav.appendChild(adminBtn);
+    if (userData?.role !== 'trainer') {
+        alert('❌ Только тренер может отмечать присутствие.');
+        return;
+    }
+
+    try {
+        console.log('Пытаюсь загрузить тренировки тренера...');
+        
+        const trainingsSnapshot = await db.collection('trainings')
+            .where('trainerId', '==', currentUser.uid)
+            .get();
+
+        console.log('Запрос выполнен. Найдено тренировок:', trainingsSnapshot.size);
+
+        const select = document.getElementById('attendanceTraining');
+        if (!select) {
+            console.error('Ошибка: Не найден элемент select с id="attendanceTraining"');
+            alert('Внутренняя ошибка интерфейса. Элемент выбора тренировки не найден.');
+            return;
+        }
+        
+        select.innerHTML = '<option value="">Выберите тренировку для отметки</option>';
+
+        if (trainingsSnapshot.empty) {
+            console.log('У тренера нет созданных тренировок.');
+            const option = document.createElement('option');
+            option.textContent = 'У вас нет тренировок';
+            option.disabled = true;
+            select.appendChild(option);
+            alert('⚠️ У вас еще нет созданных тренировок. Сначала создайте тренировку.');
+            return;
+        }
+
+        const trainingsList = [];
+        trainingsSnapshot.forEach(doc => {
+            trainingsList.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        trainingsList.sort((a, b) => b.date?.toDate() - a.date?.toDate());
+
+        trainingsList.forEach(training => {
+            const date = training.date?.toDate() ? training.date.toDate().toLocaleDateString('ru-RU') : 'Дата не указана';
+            const option = document.createElement('option');
+            option.value = training.id;
+            option.textContent = `${training.title || 'Без названия'} (${date})`;
+            if (training.date?.toDate() < new Date()) {
+                option.textContent += ' [Прошедшая]';
+            }
+            select.appendChild(option);
+        });
+
+        console.log('Выпадающий список тренировок заполнен.');
+
+        select.onchange = async function() {
+            const trainingId = this.value;
+            console.log('Выбрана тренировка с ID:', trainingId);
+            
+            const usersDiv = document.getElementById('attendanceUsers');
+            if (!usersDiv) {
+                console.error('Ошибка: Не найден элемент div с id="attendanceUsers"');
+                return;
+            }
+            
+            if (!trainingId) {
+                usersDiv.innerHTML = '<p style="color: #666; padding: 1rem; text-align: center;">Выберите тренировку из списка.</p>';
+                return;
+            }
+
+            usersDiv.innerHTML = '<p style="color: #666; padding: 1rem; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Загрузка списка записавшихся...</p>';
+
+            try {
+                const registrationsSnapshot = await db.collection('registrations')
+                    .where('trainingId', '==', trainingId)
+                    .get();
+
+                console.log('На тренировку записано участников:', registrationsSnapshot.size);
+
+                if (registrationsSnapshot.empty) {
+                    usersDiv.innerHTML = '<p style="color: #dc3545; padding: 1rem; text-align: center;">На эту тренировку пока никто не записался.</p>';
+                    return;
+                }
+
+                let html = '<h4 style="margin-bottom: 1rem;">Отметьте присутствующих:</h4>';
+                const userPromises = [];
+                const registrations = [];
+
+                registrationsSnapshot.forEach(doc => {
+                    const reg = doc.data();
+                    reg.id = doc.id;
+                    registrations.push(reg);
+                    userPromises.push(db.collection('users').doc(reg.userId).get());
+                });
+
+                const userSnapshots = await Promise.all(userPromises);
+                console.log('Данные пользователей загружены.');
+
+                registrations.forEach((reg, index) => {
+                    const userDoc = userSnapshots[index];
+                    const user = userDoc?.exists ? userDoc.data() : {};
+                    const userName = user.name || user.email || `Участник #${index+1}`;
+                    const userEmail = user.email ? `(${user.email})` : '';
+                    
+                    const isChecked = reg.attended === true;
+                    const checkStatus = reg.attended ? ' (уже отмечен)' : '';
+
+                    html += `
+                        <div style="display: flex; align-items: center; gap: 12px; margin: 12px 0; padding: 12px; background: ${isChecked ? '#e8f5e9' : '#f8f9fa'}; border-radius: 10px; border-left: 4px solid ${isChecked ? '#28a745' : '#6c757d'};">
+                            <input type="checkbox" 
+                                   id="attend_${reg.id}" 
+                                   ${isChecked ? 'checked disabled' : ''}
+                                   data-registration="${reg.id}" 
+                                   data-user="${reg.userId}"
+                                   style="transform: scale(1.3); cursor: pointer;">
+                            <label for="attend_${reg.id}" style="flex: 1; cursor: pointer;">
+                                <div style="font-weight: 600;">${userName} ${userEmail}</div>
+                                <div style="font-size: 0.9em; color: #666; margin-top: 4px;">
+                                    <span>Статус: ${reg.willAttend ? '✅ Подтвердил участие' : '❓ Не подтвердил'}</span>
+                                    ${checkStatus ? `<span style="color: #28a745; margin-left: 10px;">${checkStatus}</span>` : ''}
+                                </div>
+                            </label>
+                        </div>
+                    `;
+                });
+
+                const hasUnmarked = registrations.some(reg => !reg.attended);
+                if (hasUnmarked) {
+                    html += `
+                        <div style="margin-top: 20px; text-align: center;">
+                            <button onclick="saveAttendance()" 
+                                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                           color: white; 
+                                           border: none; 
+                                           padding: 12px 30px; 
+                                           border-radius: 25px; 
+                                           font-weight: 600; 
+                                           cursor: pointer;">
+                                <i class="fas fa-save"></i> Сохранить отметки присутствия
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    html += `<p style="color: #28a745; padding: 1rem; text-align: center; font-weight: 600;"><i class="fas fa-check-circle"></i> Все участники уже отмечены как присутствовавшие.</p>`;
+                }
+
+                usersDiv.innerHTML = html;
+                console.log('Список участников для отметки отображен.');
+
+            } catch (loadError) {
+                console.error('Ошибка загрузки данных о записях:', loadError);
+                usersDiv.innerHTML = `
+                    <p style="color: #dc3545; padding: 1rem; text-align: center;">
+                        <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки данных.
+                    </p>
+                    <p style="color: #666; font-size: 0.9em; text-align: center;">${loadError.message}</p>
+                `;
+            }
+        };
+
+        openModal('attendanceModal');
+        console.log('Модальное окно "Отметить присутствие" открыто.');
+
+    } catch (error) {
+        console.error('Критическая ошибка в openAttendanceModal:', error);
+        alert('❌ Не удалось загрузить список тренировок. Ошибка: ' + error.message);
+    }
+}
+
+async function openAdjustBalanceModal() {
+    if (userData.role !== 'trainer') return alert('Только тренер');
+    
+    try {
+        const usersSnapshot = await db.collection('users')
+            .where('role', '==', 'user')
+            .limit(50)
+            .get();
+        
+        const select = document.getElementById('balanceUser');
+        select.innerHTML = '<option value="">Выберите пользователя</option>';
+        
+        usersSnapshot.forEach(doc => {
+            const user = doc.data();
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = `${user.name || user.email} (Баланс: ${user.balance || 0})`;
+            select.appendChild(option);
+        });
+        
+        openModal('balanceModal');
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+async function openRateUsersModal() {
+    if (userData.role !== 'trainer') return alert('Только тренер');
+    
+    try {
+        const trainingsSnapshot = await db.collection('trainings')
+            .where('trainerId', '==', currentUser.uid)
+            .limit(10)
+            .get();
+        
+        const select = document.getElementById('ratingTraining');
+        select.innerHTML = '<option value="">Выберите тренировку</option>';
+        
+        trainingsSnapshot.forEach(doc => {
+            const training = doc.data();
+            const date = training.date.toDate();
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = `${training.title} (${date.toLocaleDateString()})`;
+            select.appendChild(option);
+        });
+        
+        select.onchange = async function() {
+            if (!this.value) return;
+            
+            const trainingId = this.value;
+            const usersDiv = document.getElementById('ratingUsers');
+            usersDiv.innerHTML = '<p>Загрузка...</p>';
+            
+            const registrationsSnapshot = await db.collection('registrations')
+                .where('trainingId', '==', trainingId)
+                .where('attended', '==', true)
+                .get();
+            
+            if (registrationsSnapshot.empty) {
+                usersDiv.innerHTML = '<p>Нет участников</p>';
+                return;
+            }
+            
+            let html = '<h4>Участники для оценки:</h4>';
+            
+            const userPromises = [];
+            const registrations = [];
+            
+            registrationsSnapshot.forEach(doc => {
+                const reg = doc.data();
+                reg.id = doc.id;
+                registrations.push(reg);
+                userPromises.push(db.collection('users').doc(reg.userId).get());
+            });
+            
+            const userSnapshots = await Promise.all(userPromises);
+            
+            registrations.forEach((reg, index) => {
+                const user = userSnapshots[index].exists ? userSnapshots[index].data() : {};
+                
+                html += `
+                    <div style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                        <strong>${user.name || user.email || 'Неизвестный'}</strong>
+                        
+                        <div style="margin: 10px 0;">
+                            <label>Оценка (1-5):</label>
+                            <select id="score_${reg.userId}" style="margin-left: 10px; padding: 5px;">
+                                <option value="1">1 ★</option>
+                                <option value="2">2 ★★</option>
+                                <option value="3" selected>3 ★★★</option>
+                                <option value="4">4 ★★★★</option>
+                                <option value="5">5 ★★★★★</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label>Комментарий:</label>
+                            <textarea id="comment_${reg.userId}" 
+                                      placeholder="Отзыв" 
+                                      style="width: 100%; padding: 8px; margin-top: 5px; border-radius: 5px; border: 1px solid #ddd;"></textarea>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            usersDiv.innerHTML = html;
+        };
+        
+        openModal('ratingsModal');
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+async function saveRatings() {
+    const trainingId = document.getElementById('ratingTraining').value;
+    if (!trainingId) return alert('Выберите тренировку');
+    
+    const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+    const training = trainingDoc.data();
+    
+    const registrationsSnapshot = await db.collection('registrations')
+        .where('trainingId', '==', trainingId)
+        .where('attended', '==', true)
+        .get();
+    
+    let saved = 0;
+    
+    try {
+        for (const doc of registrationsSnapshot.docs) {
+            const reg = doc.data();
+            const userId = reg.userId;
+            
+            const score = document.getElementById(`score_${userId}`)?.value;
+            const comment = document.getElementById(`comment_${userId}`)?.value;
+            
+            if (score) {
+                await db.collection('ratings').add({
+                    userId: userId,
+                    trainingId: trainingId,
+                    score: parseInt(score),
+                    comment: comment || '',
+                    trainerId: currentUser.uid,
+                    trainerName: userData.name,
+                    trainingTitle: training.title,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                saved++;
+            }
+        }
+        
+        alert(`✅ Сохранено ${saved} оценок`);
+        closeModal('ratingsModal');
+    } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+    }
+}
+
+// ============================================
+// ✏️ РЕДАКТИРОВАНИЕ ТРЕНИРОВОК
+// ============================================
+
+async function openManageTrainingsModal() {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может управлять тренировками');
+        return;
+    }
+    
+    try {
+        const trainingsSnapshot = await db.collection('trainings')
+            .where('trainerId', '==', currentUser.uid)
+            .limit(20)
+            .get();
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        let html = `
+            <div class="modal" style="background: white; padding: 20px; border-radius: 15px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                <h3><i class="fas fa-edit"></i> Управление тренировками</h3>
+        `;
+        
+        if (trainingsSnapshot.empty) {
+            html += '<p>У вас нет тренировок</p>';
+        } else {
+            html += `
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 10px; text-align: left;">Название</th>
+                            <th style="padding: 10px; text-align: left;">Дата</th>
+                            <th style="padding: 10px; text-align: left;">Цена</th>
+                            <th style="padding: 10px; text-align: left;">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            trainingsSnapshot.forEach(doc => {
+                const training = doc.data();
+                const date = training.date.toDate();
+                
+                html += `
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">${training.title}</td>
+                        <td style="padding: 10px;">${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                        <td style="padding: 10px;">${training.price || 0} баллов</td>
+                        <td style="padding: 10px;">
+                            <button onclick="editTraining('${doc.id}')" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; border-radius: 5px; margin-right: 5px; cursor: pointer;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteTraining('${doc.id}')" style="background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += `</tbody></table>`;
+        }
+        
+        html += `
+                <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="
+                        background: #667eea;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 10px;
+                        cursor: pointer;
+                    ">Закрыть</button>
+                </div>
+            </div>
+        `;
+        
+        modal.innerHTML = html;
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+async function editTraining(trainingId) {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может редактировать тренировки');
+        return;
+    }
+    
+    try {
+        const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+        if (!trainingDoc.exists) {
+            alert('Тренировка не найдена');
+            return;
+        }
+        
+        const training = trainingDoc.data();
+        const date = training.date.toDate();
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        const formattedDate = date.toISOString().slice(0, 16);
+        
+        modal.innerHTML = `
+            <div class="modal" style="background: white; padding: 20px; border-radius: 15px; max-width: 500px; width: 90%;">
+                <h3><i class="fas fa-edit"></i> Редактировать тренировку</h3>
+                
+                <div style="margin-top: 15px;">
+                    <label>Название:</label>
+                    <input type="text" id="editTrainingTitle" value="${training.title || ''}" 
+                           style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label>Дата и время:</label>
+                    <input type="datetime-local" id="editTrainingDate" value="${formattedDate}" 
+                           style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label>Стоимость (баллы):</label>
+                    <input type="number" id="editTrainingPrice" value="${training.price || 0}" 
+                           style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label>Максимум участников:</label>
+                    <input type="number" id="editTrainingMax" value="${training.maxParticipants || ''}" 
+                           style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label>Описание:</label>
+                    <textarea id="editTrainingDesc" 
+                              style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px; height: 100px;">${training.description || ''}</textarea>
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button onclick="saveTrainingEdit('${trainingId}')" style="
+                        background: #4CAF50;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        flex: 1;
+                        cursor: pointer;
+                    ">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                    
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="
+                        background: #6c757d;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        flex: 1;
+                        cursor: pointer;
+                    ">
+                        Отмена
+                    </button>
+                    
+                    <button onclick="deleteTraining('${trainingId}')" style="
+                        background: #f44336;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        cursor: pointer;
+                    ">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+async function saveTrainingEdit(trainingId) {
+    const title = document.getElementById('editTrainingTitle').value;
+    const date = document.getElementById('editTrainingDate').value;
+    const price = document.getElementById('editTrainingPrice').value;
+    const max = document.getElementById('editTrainingMax').value;
+    const desc = document.getElementById('editTrainingDesc').value;
+    
+    if (!title || !date || !price) {
+        alert('Заполните обязательные поля');
+        return;
+    }
+    
+    try {
+        await db.collection('trainings').doc(trainingId).update({
+            title: title,
+            date: firebase.firestore.Timestamp.fromDate(new Date(date)),
+            price: parseInt(price),
+            maxParticipants: max ? parseInt(max) : null,
+            description: desc || '',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        alert('✅ Тренировка обновлена!');
+        
+        document.querySelectorAll('.modal-overlay').forEach(modal => modal.remove());
+        
+        loadTrainings();
+        
+    } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+    }
+}
+
+async function deleteTraining(trainingId) {
+    if (!confirm('Удалить эту тренировку?')) return;
+    
+    try {
+        const registrationsSnapshot = await db.collection('registrations')
+            .where('trainingId', '==', trainingId)
+            .get();
+        
+        if (!registrationsSnapshot.empty) {
+            if (!confirm(`На эту тренировку записано ${registrationsSnapshot.size} человек. Все равно удалить?`)) {
+                return;
+            }
+        }
+        
+        await db.collection('trainings').doc(trainingId).delete();
+        
+        const batch = db.batch();
+        registrationsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        
+        alert('✅ Тренировка удалена!');
+        
+        document.querySelectorAll('.modal-overlay').forEach(modal => modal.remove());
+        
+        loadTrainings();
+        
+    } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+    }
+}
+
+// ============================================
+// 📋 ЗАПИСЬ НА ТРЕНИРОВКИ
+// ============================================
+
+function openRegisterModal(trainingId, price, title) {
+    selectedTrainingId = trainingId;
+    selectedTrainingPrice = price;
+    
+    document.getElementById('registerTrainingTitle').textContent = title;
+    document.getElementById('registerTrainingPrice').textContent = price;
+    document.getElementById('registerUserBalance').textContent = userData.balance;
+    
+    openModal('registerModal');
+}
+
+async function confirmRegistration() {
+    if (!selectedTrainingId || !userData) return;
+    
+    if (userData.balance < selectedTrainingPrice) {
+        alert(`❌ Недостаточно баллов! Нужно: ${selectedTrainingPrice}, у вас: ${userData.balance}`);
+        closeModal('registerModal');
+        return;
+    }
+    
+    try {
+        await db.runTransaction(async (transaction) => {
+            const userRef = db.collection('users').doc(currentUser.uid);
+            const userDoc = await transaction.get(userRef);
+            const currentBalance = userDoc.data().balance;
+            
+            if (currentBalance < selectedTrainingPrice) {
+                throw new Error('Недостаточно баллов');
+            }
+            
+            const registrationsQuery = await db.collection('registrations')
+                .where('userId', '==', currentUser.uid)
+                .where('trainingId', '==', selectedTrainingId)
+                .get();
+            
+            if (!registrationsQuery.empty) {
+                throw new Error('Вы уже записаны');
+            }
+            
+            const trainingRef = db.collection('trainings').doc(selectedTrainingId);
+            const trainingDoc = await transaction.get(trainingRef);
+            const training = trainingDoc.data();
+            
+            const participantsQuery = await db.collection('registrations')
+                .where('trainingId', '==', selectedTrainingId)
+                .get();
+            
+            if (training.maxParticipants && participantsQuery.size >= training.maxParticipants) {
+                throw new Error('Нет свободных мест');
+            }
+            
+            transaction.update(userRef, {
+                balance: currentBalance - selectedTrainingPrice
+            });
+            
+            if (training.trainerId) {
+                const trainerRef = db.collection('users').doc(training.trainerId);
+                const trainerDoc = await transaction.get(trainerRef);
+                
+                if (trainerDoc.exists) {
+                    const trainerBalance = trainerDoc.data().balance || 0;
+                    transaction.update(trainerRef, {
+                        balance: trainerBalance + selectedTrainingPrice
+                    });
+                    
+                    const trainerTransRef = db.collection('transactions').doc();
+                    transaction.set(trainerTransRef, {
+                        userId: training.trainerId,
+                        amount: selectedTrainingPrice,
+                        type: 'credit',
+                        description: `Оплата тренировки: ${training.title}`,
+                        createdBy: currentUser.uid,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            }
+            
+            const userTransRef = db.collection('transactions').doc();
+            transaction.set(userTransRef, {
+                userId: currentUser.uid,
+                trainingId: selectedTrainingId,
+                amount: selectedTrainingPrice,
+                type: 'debit',
+                description: `Запись: ${training.title}`,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            const regRef = db.collection('registrations').doc();
+            transaction.set(regRef, {
+                userId: currentUser.uid,
+                trainingId: selectedTrainingId,
+                willAttend: true,
+                attended: false,
+                charged: true,
+                registeredAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        
+        alert('✅ Вы записаны! Баллы переведены тренеру.');
+        closeModal('registerModal');
+        
+        loadUserData();
+        loadTrainings();
+        if (document.getElementById('myBookingsScreen').classList.contains('active')) {
+            loadMyBookings();
+        }
+        
+    } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+        closeModal('registerModal');
+    }
 }
 
 // ============================================
@@ -1190,31 +1724,22 @@ async function loadAttendanceCharts() {
     
     const container = document.createElement('div');
     container.id = 'chartsContainer';
-    container.style.cssText = `
-        margin-top: 30px;
-        padding: 20px;
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    `;
+    container.className = 'charts-container';
     
     container.innerHTML = `
         <h3 style="margin-bottom: 20px;"><i class="fas fa-chart-bar"></i> Статистика посещений</h3>
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px;">
-            <div>
+        <div class="charts-grid">
+            <div class="chart-wrapper">
                 <canvas id="attendanceByMonthChart"></canvas>
             </div>
-            <div>
+            <div class="chart-wrapper">
                 <canvas id="attendanceByTrainingChart"></canvas>
             </div>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-            <div>
+            <div class="chart-wrapper">
                 <canvas id="revenueByMonthChart"></canvas>
             </div>
-            <div>
+            <div class="chart-wrapper">
                 <canvas id="userActivityChart"></canvas>
             </div>
         </div>
@@ -1296,7 +1821,6 @@ async function loadAttendanceData() {
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10);
         
-        // Строим графики
         createAttendanceByMonthChart(sortedMonths.map(m => monthlyData[m].name), sortedMonths.map(m => monthlyData[m].participants));
         createAttendanceByTrainingChart(sortedTrainingData.map(t => t[0]), sortedTrainingData.map(t => t[1]));
         createRevenueByMonthChart(sortedMonths.map(m => monthlyData[m].name), sortedMonths.map(m => monthlyData[m].revenue));
@@ -1460,15 +1984,127 @@ function createUserActivityChart(totalParticipants, totalRevenue, totalTrainings
 }
 
 // ============================================
+// 🎯 ФУНКЦИИ ТРЕНЕРА (СТАТИСТИКА)
+// ============================================
+
+async function loadTrainerStats() {
+    if (userData.role !== 'trainer') return;
+    
+    try {
+        const trainingsSnapshot = await db.collection('trainings')
+            .where('trainerId', '==', currentUser.uid)
+            .get();
+        
+        let totalParticipants = 0;
+        let totalRevenue = 0;
+        let upcomingTrainings = 0;
+        let pastTrainings = 0;
+        
+        const now = firebase.firestore.Timestamp.now();
+        
+        for (const doc of trainingsSnapshot.docs) {
+            const training = doc.data();
+            const isPast = training.date.toDate() < now.toDate();
+            
+            if (isPast) pastTrainings++;
+            else upcomingTrainings++;
+            
+            const registrationsSnapshot = await db.collection('registrations')
+                .where('trainingId', '==', doc.id)
+                .get();
+            
+            totalParticipants += registrationsSnapshot.size;
+            
+            registrationsSnapshot.forEach(regDoc => {
+                if (regDoc.data().charged) {
+                    totalRevenue += training.price || 0;
+                }
+            });
+        }
+        
+        const statsDiv = document.getElementById('trainerStats');
+        statsDiv.innerHTML = `
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #4CAF50;">
+                        <i class="fas fa-dumbbell"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-value">${trainingsSnapshot.size}</div>
+                        <div class="stat-label">Всего тренировок</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #2196F3;">
+                        <i class="fas fa-calendar"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-value">${upcomingTrainings}</div>
+                        <div class="stat-label">Предстоящих</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #FF9800;">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-value">${pastTrainings}</div>
+                        <div class="stat-label">Проведенных</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #9C27B0;">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-value">${totalParticipants}</div>
+                        <div class="stat-label">Участников</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #F44336;">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-value">${totalRevenue}</div>
+                        <div class="stat-label">Баллов заработано</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Ошибка загрузки статистики тренера:', error);
+    }
+}
+
+// ============================================
 // 🎯 ОБРАБОТЧИКИ СОБЫТИЙ И ИНИЦИАЛИЗАЦИЯ
 // ============================================
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('loginBtn').addEventListener('click', login);
-    document.getElementById('registerBtn').addEventListener('click', register);
-    document.getElementById('logoutBtn').addEventListener('click', logout);
+    // Назначаем обработчики событий через addEventListener
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
     
+    if (loginBtn) {
+        loginBtn.addEventListener('click', login);
+    }
+    
+    if (registerBtn) {
+        registerBtn.addEventListener('click', register);
+    }
+    
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+    
+    // Навигация
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const screen = this.dataset.screen;
@@ -1476,10 +2112,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    document.getElementById('loginPassword').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') login();
-    });
+    // Ввод пароля
+    const loginPassword = document.getElementById('loginPassword');
+    if (loginPassword) {
+        loginPassword.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') login();
+        });
+    }
     
+    // Демо аккаунты
     document.querySelectorAll('.demo-accounts p').forEach(p => {
         p.addEventListener('click', function(e) {
             if (e.target.textContent.includes('user@test.com')) {
@@ -1492,21 +2133,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    document.getElementById('loginEmail')?.focus();
+    // Фокус на поле email
+    const loginEmail = document.getElementById('loginEmail');
+    if (loginEmail) {
+        loginEmail.focus();
+    }
 });
 
 // Обработчик авторизации
 auth.onAuthStateChanged(async (user) => {
+    console.log('Auth state changed:', user ? 'User logged in' : 'User logged out');
+    
     if (user) {
         currentUser = user;
         await loadUserData();
         
         // Инициализация функций для авторизованного пользователя
         setTimeout(() => {
-            if (userData.role === 'trainer' || userData.role === 'admin') {
+            if (userData.role === 'trainer') {
                 initNotifications();
                 addNotificationsButton();
-                addAdminButton();
             }
             
             if (document.getElementById('scheduleScreen').classList.contains('active')) {
@@ -1536,333 +2182,6 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
-// Добавление CSS стилей
-const styles = `
-<style>
-/* Анимации */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes slideOut {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(100%); opacity: 0; }
-}
-
-/* Базовые стили */
-.training-card {
-    animation: fadeIn 0.3s ease;
-}
-
-.notification-toast {
-    animation: slideIn 0.3s ease;
-}
-
-/* Уведомления */
-.notifications-container {
-    max-height: 500px;
-    overflow-y: auto;
-}
-
-.notification-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 15px;
-    padding: 15px;
-    border-bottom: 1px solid #eee;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.notification-item:hover {
-    background: #f8f9fa;
-}
-
-.notification-item.unread {
-    background: #f0f8ff;
-}
-
-.notification-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 18px;
-}
-
-.notification-content {
-    flex: 1;
-}
-
-.notification-title {
-    font-weight: 600;
-    margin-bottom: 5px;
-    color: #333;
-}
-
-.notification-message {
-    font-size: 0.95em;
-    color: #666;
-    margin-bottom: 5px;
-    line-height: 1.4;
-}
-
-.notification-time {
-    font-size: 0.85em;
-    color: #999;
-}
-
-.notification-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #ff4757;
-    margin-top: 5px;
-}
-
-/* Админ панель */
-.stat-card {
-    background: white;
-    border-radius: 10px;
-    padding: 20px;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-.stat-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 24px;
-}
-
-.stat-value {
-    font-size: 24px;
-    font-weight: bold;
-    color: #333;
-}
-
-.stat-label {
-    font-size: 0.9em;
-    color: #666;
-}
-
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
-}
-
-.tabs {
-    background: white;
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-.tab-buttons {
-    display: flex;
-    background: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
-}
-
-.tab-btn {
-    padding: 15px 20px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    color: #495057;
-    border-bottom: 3px solid transparent;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.tab-btn:hover {
-    background: #e9ecef;
-}
-
-.tab-btn.active {
-    color: #667eea;
-    border-bottom-color: #667eea;
-    background: white;
-}
-
-.tab-content {
-    padding: 20px;
-}
-
-.tab-pane {
-    display: none;
-}
-
-.tab-pane.active {
-    display: block;
-}
-
-.table-container {
-    overflow-x: auto;
-}
-
-#usersTable {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-#usersTable th, #usersTable td {
-    padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid #dee2e6;
-}
-
-#usersTable th {
-    background: #f8f9fa;
-    font-weight: 600;
-    color: #495057;
-}
-
-#usersTable tr:hover {
-    background: #f8f9fa;
-}
-
-.btn-sm {
-    padding: 5px 10px;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
-}
-
-.btn-danger {
-    background: #f44336;
-    color: white;
-}
-
-.loading-spinner {
-    text-align: center;
-    padding: 40px;
-    color: #667eea;
-    font-size: 18px;
-}
-
-/* Адаптивность */
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-    
-    .header {
-        flex-direction: column;
-        gap: 10px;
-        text-align: center;
-    }
-    
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .tab-buttons {
-        flex-wrap: wrap;
-    }
-    
-    .tab-btn {
-        flex: 1;
-        min-width: 120px;
-        justify-content: center;
-    }
-    
-    .training-card {
-        margin: 10px 0;
-    }
-    
-    table {
-        font-size: 14px;
-    }
-    
-    #trainingsFilters > div {
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    #trainingsFilters input,
-    #trainingsFilters select {
-        width: 100%;
-    }
-}
-
-@media (max-width: 480px) {
-    .bottom-nav {
-        padding: 10px 5px;
-    }
-    
-    .nav-btn {
-        font-size: 12px;
-        padding: 8px 5px;
-    }
-    
-    .modal-content {
-        width: 95%;
-        margin: 10px;
-        padding: 15px;
-    }
-}
-</style>
-`;
-
-document.head.insertAdjacentHTML('beforeend', styles);
-
-// HTML для модального окна уведомлений
-const notificationsModalHTML = `
-<div id="notificationsModal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 500px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3><i class="fas fa-bell"></i> Уведомления</h3>
-            <div style="display: flex; gap: 10px;">
-                <button onclick="markAllAsRead()" style="
-                    background: #28a745;
-                    color: white;
-                    border: none;
-                    padding: 8px 15px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 0.9em;
-                ">
-                    <i class="fas fa-check-double"></i> Прочитать все
-                </button>
-                <button onclick="closeModal('notificationsModal')" style="
-                    background: none;
-                    border: none;
-                    font-size: 24px;
-                    cursor: pointer;
-                    color: #666;
-                ">×</button>
-            </div>
-        </div>
-        <div id="notificationsList"></div>
-    </div>
-</div>
-`;
-
-document.body.insertAdjacentHTML('beforeend', notificationsModalHTML);
-
 // Экспорт всех функций в глобальную область видимости
 window.showScreen = showScreen;
 window.openModal = openModal;
@@ -1870,7 +2189,10 @@ window.closeModal = closeModal;
 window.register = register;
 window.login = login;
 window.logout = logout;
-window.refreshSchedule = function() { loadTrainings(); alert('Обновлено!'); };
+window.refreshSchedule = function() { 
+    loadTrainings(); 
+    alert('Обновлено!'); 
+};
 window.openCreateTrainingModal = function() {
     if (userData.role !== 'trainer') return alert('Только тренер');
     
@@ -1916,8 +2238,6 @@ window.createTraining = async function() {
         alert('❌ Ошибка: ' + error.message);
     }
 };
-
-// Добавляем остальные функции в window
 window.openAttendanceModal = openAttendanceModal;
 window.saveAttendance = async function() {
     console.log('Функция saveAttendance вызвана');
@@ -1997,7 +2317,6 @@ window.saveAttendance = async function() {
         alert('❌ Ошибка: ' + error.message);
     }
 };
-
 window.openAdjustBalanceModal = openAdjustBalanceModal;
 window.saveBalanceAdjustment = async function() {
     const userSelect = document.getElementById('balanceUser');
@@ -2043,7 +2362,181 @@ window.saveBalanceAdjustment = async function() {
         alert('❌ Ошибка: ' + error.message);
     }
 };
+window.openRateUsersModal = openRateUsersModal;
+window.saveRatings = saveRatings;
+window.openManageTrainingsModal = openManageTrainingsModal;
+window.editTraining = editTraining;
+window.saveTrainingEdit = saveTrainingEdit;
+window.deleteTraining = deleteTraining;
+window.openRegisterModal = openRegisterModal;
+window.confirmRegistration = confirmRegistration;
+window.viewTrainingDetails = async function(trainingId) {
+    try {
+        const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+        if (!trainingDoc.exists) {
+            alert('Тренировка не найдена');
+            return;
+        }
+        
+        const training = trainingDoc.data();
+        const date = training.date.toDate();
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        modal.innerHTML = `
+            <div class="modal" style="background: white; padding: 25px; border-radius: 15px; max-width: 500px; width: 90%;">
+                <h3><i class="fas fa-info-circle"></i> Детали тренировки</h3>
+                
+                <div style="margin-top: 15px;">
+                    <h4>${training.title || 'Без названия'}</h4>
+                    <p><strong>Дата:</strong> ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                    <p><strong>Стоимость:</strong> ${training.price || 0} баллов</p>
+                    <p><strong>Максимум участников:</strong> ${training.maxParticipants || 'Не ограничено'}</p>
+                    <p><strong>Тренер:</strong> ${training.trainerName || 'Не указан'}</p>
+                </div>
+                
+                ${training.description ? `
+                    <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                        <strong>Описание:</strong>
+                        <p>${training.description}</p>
+                    </div>
+                ` : ''}
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="this.parentElement.parentElement.remove()" style="
+                        background: #667eea;
+                        color: white;
+                        border: none;
+                        padding: 10px 30px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        alert('Ошибка загрузки деталей: ' + error.message);
+    }
+};
+window.cancelTraining = async function(trainingId) {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может отменять тренировки');
+        return;
+    }
+    
+    if (!confirm('Отменить тренировку и вернуть баллы всем записавшимся?')) {
+        return;
+    }
+    
+    try {
+        const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+        if (!trainingDoc.exists) {
+            alert('Тренировка не найдена');
+            return;
+        }
+        
+        const training = trainingDoc.data();
+        const trainingPrice = training.price || 0;
+        
+        const registrationsSnapshot = await db.collection('registrations')
+            .where('trainingId', '==', trainingId)
+            .get();
+        
+        if (registrationsSnapshot.empty) {
+            alert('На тренировку никто не записан');
+            return;
+        }
+        
+        let refundedCount = 0;
+        
+        for (const doc of registrationsSnapshot.docs) {
+            const registration = doc.data();
+            
+            if (registration.charged && !registration.refunded) {
+                try {
+                    await db.runTransaction(async (transaction) => {
+                        const userRef = db.collection('users').doc(registration.userId);
+                        const userDoc = await transaction.get(userRef);
+                        
+                        if (!userDoc.exists) {
+                            throw new Error('Пользователь не найден');
+                        }
+                        
+                        const currentBalance = userDoc.data().balance;
+                        const newBalance = currentBalance + trainingPrice;
+                        
+                        transaction.update(userRef, {
+                            balance: newBalance
+                        });
+                        
+                        const transRef = db.collection('transactions').doc();
+                        transaction.set(transRef, {
+                            userId: registration.userId,
+                            trainingId: trainingId,
+                            amount: trainingPrice,
+                            type: 'credit',
+                            description: `Возврат за отмененную тренировку: ${training.title}`,
+                            createdBy: currentUser.uid,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        
+                        transaction.update(doc.ref, {
+                            cancelled: true,
+                            refunded: true,
+                            cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    });
+                    
+                    refundedCount++;
+                    console.log(`✅ Возвращено ${trainingPrice} баллов пользователю ${registration.userId}`);
+                    
+                } catch (error) {
+                    console.error(`❌ Ошибка возврата для пользователя ${registration.userId}:`, error);
+                }
+            }
+        }
+        
+        await db.collection('trainings').doc(trainingId).update({
+            cancelled: true,
+            cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+            cancelledBy: currentUser.uid
+        });
+        
+        if (refundedCount > 0) {
+            alert(`✅ Тренировка отменена! Возвращено баллов ${refundedCount} участникам.`);
+        } else {
+            alert('✅ Тренировка отменена (баллы не возвращались).');
+        }
+        
+        loadTrainings();
+        
+    } catch (error) {
+        alert('❌ Ошибка отмены тренировки: ' + error.message);
+    }
+};
+window.openNotificationsModal = openNotificationsModal;
+window.markAllAsRead = markAllAsRead;
+window.applyFilters = applyFilters;
+window.resetFilters = resetFilters;
+window.removeFilter = removeFilter;
 
-// Добавьте остальные функции по аналогии...
-
-// Если нужны другие функции из оригинального кода, добавьте их здесь
+console.log('FitBook application loaded successfully!');
