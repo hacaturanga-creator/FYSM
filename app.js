@@ -2423,3 +2423,1267 @@ window.exportAttendanceToExcel = exportAttendanceToExcel;
 window.exportFinancialToExcel = exportFinancialToExcel;
 window.viewTrainingDetails = viewTrainingDetails;
 window.requestRefund = requestRefund;
+// ============================================
+// 📄 ПАГИНАЦИЯ ДЛЯ ТРЕНИРОВОК
+// ============================================
+
+let trainingsLastDoc = null;
+let trainingsHasMore = true;
+const TRAININGS_PER_PAGE = 10;
+
+async function loadTrainings(loadMore = false) {
+    try {
+        const container = document.getElementById('trainingsList');
+        
+        if (!loadMore) {
+            container.innerHTML = '';
+            trainingsLastDoc = null;
+            trainingsHasMore = true;
+        }
+        
+        let query = db.collection('trainings')
+            .where('date', '>=', firebase.firestore.Timestamp.now())
+            .orderBy('date');
+        
+        // Если есть последний документ, начинаем с него
+        if (trainingsLastDoc && loadMore) {
+            query = query.startAfter(trainingsLastDoc);
+        }
+        
+        query = query.limit(TRAININGS_PER_PAGE);
+        
+        const querySnapshot = await query.get();
+        
+        if (querySnapshot.empty) {
+            if (!loadMore) {
+                container.innerHTML = '<p class="text-center">Нет тренировок</p>';
+            }
+            trainingsHasMore = false;
+            return;
+        }
+        
+        // Сохраняем последний документ для пагинации
+        trainingsLastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+        trainingsHasMore = querySnapshot.docs.length === TRAININGS_PER_PAGE;
+        
+        // Отображаем тренировки
+        querySnapshot.forEach(doc => {
+            const training = doc.data();
+            const date = training.date.toDate();
+            const isCancelled = training.cancelled;
+            
+            const card = document.createElement('div');
+            card.className = 'training-card';
+            card.style.borderLeft = isCancelled ? '4px solid #dc3545' : '4px solid #667eea';
+            card.style.opacity = isCancelled ? '0.7' : '1';
+            
+            card.innerHTML = `
+                ${isCancelled ? '<div style="background: #dc3545; color: white; padding: 5px; border-radius: 5px; margin-bottom: 10px; text-align: center;">❌ ОТМЕНЕНА</div>' : ''}
+                <h3>${training.title || 'Без названия'}</h3>
+                <div class="training-meta">
+                    <span><i class="far fa-calendar"></i> ${date.toLocaleDateString()}</span>
+                    <span><i class="far fa-clock"></i> ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span><i class="fas fa-coins"></i> ${training.price || 0} баллов</span>
+                    ${training.maxParticipants ? `<span><i class="fas fa-users"></i> до ${training.maxParticipants} чел.</span>` : ''}
+                </div>
+                ${training.description ? `<p>${training.description}</p>` : ''}
+                ${training.trainerName ? `<p><small><i class="fas fa-user-tie"></i> ${training.trainerName}</small></p>` : ''}
+                
+                <div class="mt-2">
+                    ${userData && userData.role === 'trainer' ? `
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="editTraining('${doc.id}')" class="btn-secondary" style="flex: 1;">
+                                <i class="fas fa-edit"></i> Редактировать
+                            </button>
+                            ${!isCancelled ? `
+                                <button onclick="cancelTraining('${doc.id}')" class="btn-danger" style="flex: 1; background: #dc3545;">
+                                    <i class="fas fa-ban"></i> Отменить
+                                </button>
+                            ` : ''}
+                        </div>
+                    ` : `
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="openRegisterModal('${doc.id}', ${training.price || 0}, '${training.title}')" 
+                                    class="btn-primary" style="flex: 1;"
+                                    ${(userData && userData.balance < (training.price || 0)) || isCancelled ? 'disabled' : ''}>
+                                <i class="fas fa-calendar-plus"></i> ${isCancelled ? 'Отменена' : 'Записаться'}
+                            </button>
+                            <button onclick="viewTrainingDetails('${doc.id}')" class="btn-secondary" style="flex: 1;">
+                                <i class="fas fa-info-circle"></i> Подробнее
+                            </button>
+                        </div>
+                    `}
+                </div>
+            `;
+            
+            container.appendChild(card);
+        });
+        
+        // Добавляем кнопку "Показать еще" если есть еще данные
+        updateLoadMoreButton();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки тренировок:', error);
+        document.getElementById('trainingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
+    }
+}
+
+function updateLoadMoreButton() {
+    let loadMoreBtn = document.getElementById('loadMoreTrainings');
+    
+    if (!loadMoreBtn) {
+        loadMoreBtn = document.createElement('button');
+        loadMoreBtn.id = 'loadMoreTrainings';
+        loadMoreBtn.className = 'btn-secondary';
+        loadMoreBtn.style.width = '100%';
+        loadMoreBtn.style.marginTop = '20px';
+        loadMoreBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Показать еще';
+        loadMoreBtn.onclick = () => loadTrainings(true);
+        
+        document.getElementById('trainingsList').parentNode.appendChild(loadMoreBtn);
+    }
+    
+    if (!trainingsHasMore) {
+        loadMoreBtn.style.display = 'none';
+    } else {
+        loadMoreBtn.style.display = 'block';
+    }
+}
+
+// Добавляем кнопку фильтров
+function addFiltersToSchedule() {
+    const scheduleScreen = document.getElementById('scheduleScreen');
+    
+    // Создаем панель фильтров
+    const filterPanel = document.createElement('div');
+    filterPanel.id = 'trainingsFilters';
+    filterPanel.style.cssText = `
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    `;
+    
+    filterPanel.innerHTML = `
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <input type="text" id="searchTrainings" placeholder="Поиск тренировок..." 
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            </div>
+            
+            <div>
+                <select id="filterDate" style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    <option value="">Все даты</option>
+                    <option value="today">Сегодня</option>
+                    <option value="tomorrow">Завтра</option>
+                    <option value="week">Эта неделя</option>
+                    <option value="month">Этот месяц</option>
+                </select>
+            </div>
+            
+            <div>
+                <select id="filterPrice" style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    <option value="">Любая цена</option>
+                    <option value="free">Бесплатные</option>
+                    <option value="0-100">0-100 баллов</option>
+                    <option value="100-500">100-500 баллов</option>
+                    <option value="500+">500+ баллов</option>
+                </select>
+            </div>
+            
+            <button onclick="applyFilters()" style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+            ">
+                <i class="fas fa-filter"></i> Применить
+            </button>
+            
+            <button onclick="resetFilters()" style="
+                background: #6c757d;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+            ">
+                <i class="fas fa-times"></i> Сбросить
+            </button>
+        </div>
+        
+        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;" id="activeFilters">
+        </div>
+    `;
+    
+    // Вставляем фильтры перед списком тренировок
+    const trainingsContainer = scheduleScreen.querySelector('.content');
+    trainingsContainer.insertBefore(filterPanel, trainingsContainer.firstChild);
+    
+    // Добавляем обработчики событий
+    document.getElementById('searchTrainings').addEventListener('input', debounce(applyFilters, 500));
+    document.getElementById('filterDate').addEventListener('change', applyFilters);
+    document.getElementById('filterPrice').addEventListener('change', applyFilters);
+}
+
+// Функция для задержки поиска
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Применение фильтров
+async function applyFilters() {
+    const searchTerm = document.getElementById('searchTrainings').value.toLowerCase();
+    const dateFilter = document.getElementById('filterDate').value;
+    const priceFilter = document.getElementById('filterPrice').value;
+    
+    // Показываем активные фильтры
+    const activeFiltersContainer = document.getElementById('activeFilters');
+    activeFiltersContainer.innerHTML = '';
+    
+    const filters = [];
+    if (searchTerm) filters.push(`Поиск: "${searchTerm}"`);
+    if (dateFilter) filters.push(`Дата: ${document.getElementById('filterDate').options[document.getElementById('filterDate').selectedIndex].text}`);
+    if (priceFilter) filters.push(`Цена: ${document.getElementById('filterPrice').options[document.getElementById('filterPrice').selectedIndex].text}`);
+    
+    filters.forEach(filter => {
+        const badge = document.createElement('span');
+        badge.style.cssText = `
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        `;
+        badge.innerHTML = `${filter} <i class="fas fa-times" style="cursor: pointer;" onclick="removeFilter('${filter.split(':')[0].trim()}')"></i>`;
+        activeFiltersContainer.appendChild(badge);
+    });
+    
+    // Здесь будет логика фильтрации
+    // Пока просто перезагружаем тренировки
+    loadTrainings();
+}
+
+function resetFilters() {
+    document.getElementById('searchTrainings').value = '';
+    document.getElementById('filterDate').selectedIndex = 0;
+    document.getElementById('filterPrice').selectedIndex = 0;
+    document.getElementById('activeFilters').innerHTML = '';
+    loadTrainings();
+}
+
+function removeFilter(filterType) {
+    switch(filterType) {
+        case 'Поиск':
+            document.getElementById('searchTrainings').value = '';
+            break;
+        case 'Дата':
+            document.getElementById('filterDate').selectedIndex = 0;
+            break;
+        case 'Цена':
+            document.getElementById('filterPrice').selectedIndex = 0;
+            break;
+    }
+    applyFilters();
+}
+
+// Инициализация при показе экрана расписания
+const originalShowScreen = window.showScreen;
+window.showScreen = function(screenName) {
+    originalShowScreen(screenName);
+    
+    if (screenName === 'schedule') {
+        // Даем время на отрисовку DOM
+        setTimeout(() => {
+            if (!document.getElementById('trainingsFilters')) {
+                addFiltersToSchedule();
+            }
+        }, 100);
+    }
+};
+// ============================================
+// 🔍 РАСШИРЕННАЯ ФИЛЬТРАЦИЯ И ПОИСК
+// ============================================
+
+let currentFilters = {
+    search: '',
+    date: '',
+    price: '',
+    trainer: '',
+    status: ''
+};
+
+async function loadTrainingsWithFilters(loadMore = false) {
+    try {
+        const container = document.getElementById('trainingsList');
+        
+        if (!loadMore) {
+            container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+            trainingsLastDoc = null;
+            trainingsHasMore = true;
+        }
+        
+        let query = db.collection('trainings');
+        
+        // Фильтр по дате (только будущие тренировки)
+        query = query.where('date', '>=', firebase.firestore.Timestamp.now());
+        
+        // Фильтр по поисковому запросу
+        if (currentFilters.search) {
+            // Note: Firestore не поддерживает полнотекстовый поиск
+            // В реальном приложении нужно использовать Algolia или ElasticSearch
+            // Здесь просто фильтруем на клиенте
+        }
+        
+        // Фильтр по дате
+        if (currentFilters.date) {
+            const now = new Date();
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const weekEnd = new Date(now);
+            weekEnd.setDate(weekEnd.getDate() + 7);
+            const monthEnd = new Date(now);
+            monthEnd.setMonth(monthEnd.getMonth() + 1);
+            
+            switch(currentFilters.date) {
+                case 'today':
+                    const todayStart = new Date(now);
+                    todayStart.setHours(0, 0, 0, 0);
+                    const todayEnd = new Date(now);
+                    todayEnd.setHours(23, 59, 59, 999);
+                    query = query.where('date', '>=', firebase.firestore.Timestamp.fromDate(todayStart))
+                                 .where('date', '<=', firebase.firestore.Timestamp.fromDate(todayEnd));
+                    break;
+                case 'tomorrow':
+                    const tomorrowStart = new Date(tomorrow);
+                    tomorrowStart.setHours(0, 0, 0, 0);
+                    const tomorrowEnd = new Date(tomorrow);
+                    tomorrowEnd.setHours(23, 59, 59, 999);
+                    query = query.where('date', '>=', firebase.firestore.Timestamp.fromDate(tomorrowStart))
+                                 .where('date', '<=', firebase.firestore.Timestamp.fromDate(tomorrowEnd));
+                    break;
+                case 'week':
+                    query = query.where('date', '<=', firebase.firestore.Timestamp.fromDate(weekEnd));
+                    break;
+                case 'month':
+                    query = query.where('date', '<=', firebase.firestore.Timestamp.fromDate(monthEnd));
+                    break;
+            }
+        }
+        
+        // Фильтр по цене
+        if (currentFilters.price) {
+            // Firestore не поддерживает range queries по разным полям в одном запросе
+            // Фильтруем на клиенте
+        }
+        
+        // Фильтр по тренеру
+        if (currentFilters.trainer) {
+            query = query.where('trainerId', '==', currentFilters.trainer);
+        }
+        
+        // Фильтр по статусу
+        if (currentFilters.status === 'available') {
+            // Только тренировки с свободными местами
+        } else if (currentFilters.status === 'registered') {
+            // Только тренировки, на которые пользователь записан
+        }
+        
+        // Сортировка по дате
+        query = query.orderBy('date');
+        
+        // Пагинация
+        if (trainingsLastDoc && loadMore) {
+            query = query.startAfter(trainingsLastDoc);
+        }
+        
+        query = query.limit(TRAININGS_PER_PAGE);
+        
+        const querySnapshot = await query.get();
+        
+        if (querySnapshot.empty) {
+            if (!loadMore) {
+                container.innerHTML = '<p class="text-center">Нет тренировок по выбранным фильтрам</p>';
+            }
+            trainingsHasMore = false;
+            return;
+        }
+        
+        trainingsLastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+        trainingsHasMore = querySnapshot.docs.length === TRAININGS_PER_PAGE;
+        
+        // Фильтрация на клиенте (для полей, которые нельзя фильтровать в Firestore)
+        let trainings = [];
+        querySnapshot.forEach(doc => {
+            const training = doc.data();
+            training.id = doc.id;
+            
+            // Фильтр по поиску
+            if (currentFilters.search) {
+                const searchLower = currentFilters.search.toLowerCase();
+                const matches = training.title?.toLowerCase().includes(searchLower) ||
+                              training.description?.toLowerCase().includes(searchLower) ||
+                              training.trainerName?.toLowerCase().includes(searchLower);
+                if (!matches) return;
+            }
+            
+            // Фильтр по цене
+            if (currentFilters.price) {
+                const price = training.price || 0;
+                switch(currentFilters.price) {
+                    case 'free':
+                        if (price > 0) return;
+                        break;
+                    case '0-100':
+                        if (price < 0 || price > 100) return;
+                        break;
+                    case '100-500':
+                        if (price < 100 || price > 500) return;
+                        break;
+                    case '500+':
+                        if (price < 500) return;
+                        break;
+                }
+            }
+            
+            trainings.push({ id: doc.id, ...training });
+        });
+        
+        // Очищаем контейнер если первая загрузка
+        if (!loadMore) {
+            container.innerHTML = '';
+        }
+        
+        // Отображаем отфильтрованные тренировки
+        trainings.forEach(training => {
+            const date = training.date.toDate();
+            const isCancelled = training.cancelled;
+            
+            const card = document.createElement('div');
+            card.className = 'training-card';
+            card.style.borderLeft = isCancelled ? '4px solid #dc3545' : '4px solid #667eea';
+            card.style.opacity = isCancelled ? '0.7' : '1';
+            
+            card.innerHTML = `
+                ${isCancelled ? '<div style="background: #dc3545; color: white; padding: 5px; border-radius: 5px; margin-bottom: 10px; text-align: center;">❌ ОТМЕНЕНА</div>' : ''}
+                <h3>${training.title || 'Без названия'}</h3>
+                <div class="training-meta">
+                    <span><i class="far fa-calendar"></i> ${date.toLocaleDateString()}</span>
+                    <span><i class="far fa-clock"></i> ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span><i class="fas fa-coins"></i> ${training.price || 0} баллов</span>
+                    ${training.maxParticipants ? `<span><i class="fas fa-users"></i> до ${training.maxParticipants} чел.</span>` : ''}
+                </div>
+                ${training.description ? `<p>${training.description}</p>` : ''}
+                ${training.trainerName ? `<p><small><i class="fas fa-user-tie"></i> ${training.trainerName}</small></p>` : ''}
+                
+                <div class="mt-2">
+                    ${userData && userData.role === 'trainer' ? `
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="editTraining('${training.id}')" class="btn-secondary" style="flex: 1;">
+                                <i class="fas fa-edit"></i> Редактировать
+                            </button>
+                            ${!isCancelled ? `
+                                <button onclick="cancelTraining('${training.id}')" class="btn-danger" style="flex: 1; background: #dc3545;">
+                                    <i class="fas fa-ban"></i> Отменить
+                                </button>
+                            ` : ''}
+                        </div>
+                    ` : `
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="openRegisterModal('${training.id}', ${training.price || 0}, '${training.title}')" 
+                                    class="btn-primary" style="flex: 1;"
+                                    ${(userData && userData.balance < (training.price || 0)) || isCancelled ? 'disabled' : ''}>
+                                <i class="fas fa-calendar-plus"></i> ${isCancelled ? 'Отменена' : 'Записаться'}
+                            </button>
+                            <button onclick="viewTrainingDetails('${training.id}')" class="btn-secondary" style="flex: 1;">
+                                <i class="fas fa-info-circle"></i> Подробнее
+                            </button>
+                        </div>
+                    `}
+                </div>
+            `;
+            
+            container.appendChild(card);
+        });
+        
+        updateLoadMoreButton();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки тренировок с фильтрами:', error);
+        document.getElementById('trainingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
+    }
+}
+
+// РАСШИРЕННАЯ ПАНЕЛЬ ФИЛЬТРОВ
+function addAdvancedFilters() {
+    const filterPanel = document.getElementById('trainingsFilters');
+    if (!filterPanel) return;
+    
+    // Добавляем дополнительные фильтры
+    const advancedFilters = document.createElement('div');
+    advancedFilters.id = 'advancedFilters';
+    advancedFilters.style.cssText = `
+        margin-top: 15px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        display: none;
+    `;
+    
+    advancedFilters.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Тренер:</label>
+                <select id="filterTrainer" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                    <option value="">Все тренеры</option>
+                </select>
+            </div>
+            
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Статус:</label>
+                <select id="filterStatus" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                    <option value="">Все</option>
+                    <option value="available">Свободные места</option>
+                    <option value="registered">Мои записи</option>
+                    <option value="upcoming">Предстоящие</option>
+                </select>
+            </div>
+            
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Сортировка:</label>
+                <select id="filterSort" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                    <option value="date_asc">По дате (сначала ближайшие)</option>
+                    <option value="date_desc">По дате (сначала дальние)</option>
+                    <option value="price_asc">По цене (дешевые)</option>
+                    <option value="price_desc">По цене (дорогие)</option>
+                </select>
+            </div>
+        </div>
+    `;
+    
+    filterPanel.appendChild(advancedFilters);
+    
+    // Кнопка для показа/скрытия дополнительных фильтров
+    const toggleBtn = document.createElement('button');
+    toggleBtn.innerHTML = '<i class="fas fa-sliders-h"></i> Дополнительные фильтры';
+    toggleBtn.style.cssText = `
+        background: none;
+        border: none;
+        color: #667eea;
+        cursor: pointer;
+        padding: 10px 0;
+        font-size: 0.9em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    toggleBtn.onclick = () => {
+        const advancedFilters = document.getElementById('advancedFilters');
+        if (advancedFilters.style.display === 'none') {
+            advancedFilters.style.display = 'block';
+            toggleBtn.innerHTML = '<i class="fas fa-sliders-h"></i> Скрыть фильтры';
+        } else {
+            advancedFilters.style.display = 'none';
+            toggleBtn.innerHTML = '<i class="fas fa-sliders-h"></i> Дополнительные фильтры';
+        }
+    };
+    
+    filterPanel.querySelector('#activeFilters').parentNode.insertBefore(toggleBtn, filterPanel.querySelector('#activeFilters').nextSibling);
+    
+    // Загружаем список тренеров для фильтра
+    loadTrainersForFilter();
+}
+
+// ЗАГРУЗКА ТРЕНЕРОВ ДЛЯ ФИЛЬТРА
+async function loadTrainersForFilter() {
+    try {
+        const trainersSnapshot = await db.collection('users')
+            .where('role', '==', 'trainer')
+            .get();
+        
+        const select = document.getElementById('filterTrainer');
+        trainersSnapshot.forEach(doc => {
+            const trainer = doc.data();
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = trainer.name || trainer.email;
+            select.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Ошибка загрузки тренеров:', error);
+    }
+}
+
+// ОБНОВЛЕННАЯ ФУНКЦИЯ ПРИМЕНЕНИЯ ФИЛЬТРОВ
+async function applyAdvancedFilters() {
+    currentFilters = {
+        search: document.getElementById('searchTrainings').value.toLowerCase(),
+        date: document.getElementById('filterDate').value,
+        price: document.getElementById('filterPrice').value,
+        trainer: document.getElementById('filterTrainer').value,
+        status: document.getElementById('filterStatus').value,
+        sort: document.getElementById('filterSort').value
+    };
+    
+    // Показываем активные фильтры
+    updateActiveFiltersDisplay();
+    
+    // Загружаем тренировки с новыми фильтрами
+    await loadTrainingsWithFilters(false);
+}
+
+// ОБНОВЛЕНИЕ ОТОБРАЖЕНИЯ АКТИВНЫХ ФИЛЬТРОВ
+function updateActiveFiltersDisplay() {
+    const container = document.getElementById('activeFilters');
+    container.innerHTML = '';
+    
+    Object.entries(currentFilters).forEach(([key, value]) => {
+        if (!value) return;
+        
+        let displayText = '';
+        let displayValue = value;
+        
+        switch(key) {
+            case 'search':
+                displayText = `Поиск: "${value}"`;
+                break;
+            case 'date':
+                const dateOptions = {
+                    'today': 'Сегодня',
+                    'tomorrow': 'Завтра',
+                    'week': 'Эта неделя',
+                    'month': 'Этот месяц'
+                };
+                displayText = `Дата: ${dateOptions[value] || value}`;
+                break;
+            case 'price':
+                const priceOptions = {
+                    'free': 'Бесплатные',
+                    '0-100': '0-100 баллов',
+                    '100-500': '100-500 баллов',
+                    '500+': '500+ баллов'
+                };
+                displayText = `Цена: ${priceOptions[value] || value}`;
+                break;
+            case 'trainer':
+                displayText = `Тренер: ${document.getElementById('filterTrainer').options[document.getElementById('filterTrainer').selectedIndex].text}`;
+                break;
+            case 'status':
+                const statusOptions = {
+                    'available': 'Свободные места',
+                    'registered': 'Мои записи',
+                    'upcoming': 'Предстоящие'
+                };
+                displayText = `Статус: ${statusOptions[value] || value}`;
+                break;
+            case 'sort':
+                const sortOptions = {
+                    'date_asc': 'По дате ↑',
+                    'date_desc': 'По дате ↓',
+                    'price_asc': 'По цене ↑',
+                    'price_desc': 'По цене ↓'
+                };
+                displayText = `Сортировка: ${sortOptions[value] || value}`;
+                break;
+        }
+        
+        if (displayText) {
+            const badge = document.createElement('span');
+            badge.style.cssText = `
+                background: #e3f2fd;
+                color: #1976d2;
+                padding: 5px 10px;
+                border-radius: 15px;
+                font-size: 0.85em;
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                margin: 2px;
+            `;
+            badge.innerHTML = `${displayText} <i class="fas fa-times" style="cursor: pointer;" onclick="removeFilter('${key}')"></i>`;
+            container.appendChild(badge);
+        }
+    });
+}
+
+// УДАЛЕНИЕ КОНКРЕТНОГО ФИЛЬТРА
+function removeFilter(filterKey) {
+    switch(filterKey) {
+        case 'search':
+            document.getElementById('searchTrainings').value = '';
+            break;
+        case 'date':
+            document.getElementById('filterDate').selectedIndex = 0;
+            break;
+        case 'price':
+            document.getElementById('filterPrice').selectedIndex = 0;
+            break;
+        case 'trainer':
+            document.getElementById('filterTrainer').selectedIndex = 0;
+            break;
+        case 'status':
+            document.getElementById('filterStatus').selectedIndex = 0;
+            break;
+        case 'sort':
+            document.getElementById('filterSort').selectedIndex = 0;
+            break;
+    }
+    
+    currentFilters[filterKey] = '';
+    applyAdvancedFilters();
+}
+
+// СОХРАНЕНИЕ И ЗАГРУЗКА ФИЛЬТРОВ
+function saveFiltersToLocalStorage() {
+    localStorage.setItem('fitbook_filters', JSON.stringify(currentFilters));
+}
+
+function loadFiltersFromLocalStorage() {
+    const saved = localStorage.getItem('fitbook_filters');
+    if (saved) {
+        currentFilters = JSON.parse(saved);
+        
+        // Восстанавливаем значения в полях
+        document.getElementById('searchTrainings').value = currentFilters.search || '';
+        document.getElementById('filterDate').value = currentFilters.date || '';
+        document.getElementById('filterPrice').value = currentFilters.price || '';
+        document.getElementById('filterTrainer').value = currentFilters.trainer || '';
+        document.getElementById('filterStatus').value = currentFilters.status || '';
+        document.getElementById('filterSort').value = currentFilters.sort || 'date_asc';
+    }
+}
+
+// ОБНОВЛЯЕМ ИНИЦИАЛИЗАЦИЮ ФИЛЬТРОВ
+const originalInitFilters = addFiltersToSchedule;
+addFiltersToSchedule = function() {
+    originalInitFilters();
+    setTimeout(() => {
+        addAdvancedFilters();
+        loadFiltersFromLocalStorage();
+        
+        // Обновляем обработчики событий
+        document.getElementById('searchTrainings').oninput = debounce(applyAdvancedFilters, 500);
+        document.getElementById('filterDate').onchange = applyAdvancedFilters;
+        document.getElementById('filterPrice').onchange = applyAdvancedFilters;
+        document.getElementById('filterTrainer').onchange = applyAdvancedFilters;
+        document.getElementById('filterStatus').onchange = applyAdvancedFilters;
+        document.getElementById('filterSort').onchange = applyAdvancedFilters;
+        
+        // Кнопка "Применить" теперь использует расширенные фильтры
+        const applyBtn = document.querySelector('#trainingsFilters button[onclick="applyFilters()"]');
+        if (applyBtn) {
+            applyBtn.onclick = applyAdvancedFilters;
+        }
+    }, 100);
+};
+// ============================================
+// 👑 АДМИН-ПАНЕЛЬ
+// ============================================
+
+// ПРОВЕРКА ПРАВ АДМИНА
+function isAdmin() {
+    return userData && userData.role === 'admin';
+}
+
+// ЗАГРУЗКА АДМИН-ПАНЕЛИ
+async function loadAdminPanel() {
+    if (!isAdmin()) return;
+    
+    const adminScreen = document.createElement('div');
+    adminScreen.id = 'adminScreen';
+    adminScreen.className = 'screen';
+    adminScreen.innerHTML = `
+        <div class="container">
+            <div class="header">
+                <h2><i class="fas fa-crown"></i> Админ-панель</h2>
+                <button onclick="showScreen('schedule')" class="btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Назад
+                </button>
+            </div>
+            
+            <div class="content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #4CAF50;">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="totalUsers">0</div>
+                            <div class="stat-label">Всего пользователей</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #2196F3;">
+                            <i class="fas fa-dumbbell"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="totalTrainings">0</div>
+                            <div class="stat-label">Тренировок всего</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #FF9800;">
+                            <i class="fas fa-coins"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="totalBalance">0</div>
+                            <div class="stat-label">Всего баллов в системе</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #9C27B0;">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="totalRegistrations">0</div>
+                            <div class="stat-label">Всего записей</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tabs" style="margin-top: 30px;">
+                    <div class="tab-buttons">
+                        <button class="tab-btn active" onclick="switchAdminTab('users')">
+                            <i class="fas fa-users"></i> Пользователи
+                        </button>
+                        <button class="tab-btn" onclick="switchAdminTab('trainings')">
+                            <i class="fas fa-dumbbell"></i> Тренировки
+                        </button>
+                        <button class="tab-btn" onclick="switchAdminTab('transactions')">
+                            <i class="fas fa-exchange-alt"></i> Транзакции
+                        </button>
+                        <button class="tab-btn" onclick="switchAdminTab('reports')">
+                            <i class="fas fa-chart-bar"></i> Отчеты
+                        </button>
+                        <button class="tab-btn" onclick="switchAdminTab('settings')">
+                            <i class="fas fa-cog"></i> Настройки
+                        </button>
+                    </div>
+                    
+                    <div class="tab-content">
+                        <div id="adminTabUsers" class="tab-pane active">
+                            <div class="table-container">
+                                <table id="usersTable">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Имя</th>
+                                            <th>Email</th>
+                                            <th>Роль</th>
+                                            <th>Баланс</th>
+                                            <th>Дата регистрации</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersTableBody">
+                                        <!-- Данные загружаются динамически -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div id="adminTabTrainings" class="tab-pane">
+                            <div id="adminTrainingsList"></div>
+                        </div>
+                        
+                        <div id="adminTabTransactions" class="tab-pane">
+                            <div id="adminTransactionsList"></div>
+                        </div>
+                        
+                        <div id="adminTabReports" class="tab-pane">
+                            <div id="adminReports"></div>
+                        </div>
+                        
+                        <div id="adminTabSettings" class="tab-pane">
+                            <div id="adminSettings"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.querySelector('.screens').appendChild(adminScreen);
+    
+    // Загружаем статистику
+    await loadAdminStats();
+    
+    // Загружаем данные для первой вкладки
+    await loadAdminUsers();
+}
+
+// ЗАГРУЗКА СТАТИСТИКИ АДМИНА
+async function loadAdminStats() {
+    try {
+        // Получаем общее количество пользователей
+        const usersSnapshot = await db.collection('users').get();
+        document.getElementById('totalUsers').textContent = usersSnapshot.size;
+        
+        // Получаем общее количество тренировок
+        const trainingsSnapshot = await db.collection('trainings').get();
+        document.getElementById('totalTrainings').textContent = trainingsSnapshot.size;
+        
+        // Считаем общий баланс
+        let totalBalance = 0;
+        usersSnapshot.forEach(doc => {
+            const user = doc.data();
+            totalBalance += user.balance || 0;
+        });
+        document.getElementById('totalBalance').textContent = totalBalance;
+        
+        // Получаем общее количество записей
+        const registrationsSnapshot = await db.collection('registrations').get();
+        document.getElementById('totalRegistrations').textContent = registrationsSnapshot.size;
+        
+    } catch (error) {
+        console.error('Ошибка загрузки статистики админа:', error);
+    }
+}
+
+// ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ ДЛЯ АДМИНА
+async function loadAdminUsers() {
+    try {
+        const usersSnapshot = await db.collection('users')
+            .orderBy('createdAt', 'desc')
+            .limit(100)
+            .get();
+        
+        const tbody = document.getElementById('usersTableBody');
+        tbody.innerHTML = '';
+        
+        usersSnapshot.forEach(doc => {
+            const user = doc.data();
+            const createdAt = user.createdAt?.toDate() || new Date();
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${doc.id.substring(0, 8)}...</td>
+                <td>${user.name || '-'}</td>
+                <td>${user.email || '-'}</td>
+                <td>
+                    <select class="role-select" data-user="${doc.id}" style="padding: 5px; border-radius: 3px; border: 1px solid #ddd;">
+                        <option value="user" ${user.role === 'user' ? 'selected' : ''}>Пользователь</option>
+                        <option value="trainer" ${user.role === 'trainer' ? 'selected' : ''}>Тренер</option>
+                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Админ</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="number" value="${user.balance || 0}" 
+                           data-user="${doc.id}" 
+                           class="balance-input"
+                           style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 3px;">
+                </td>
+                <td>${createdAt.toLocaleDateString()}</td>
+                <td>
+                    <button onclick="editUserAsAdmin('${doc.id}')" class="btn-sm" style="margin-right: 5px;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteUserAsAdmin('${doc.id}')" class="btn-sm btn-danger">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        });
+        
+        // Добавляем обработчики событий для изменения роли и баланса
+        document.querySelectorAll('.role-select').forEach(select => {
+            select.addEventListener('change', async (e) => {
+                const userId = e.target.dataset.user;
+                const newRole = e.target.value;
+                
+                if (confirm(`Изменить роль пользователя на "${newRole}"?`)) {
+                    try {
+                        await db.collection('users').doc(userId).update({
+                            role: newRole
+                        });
+                        alert('✅ Роль обновлена');
+                    } catch (error) {
+                        alert('❌ Ошибка: ' + error.message);
+                        e.target.value = userData.role; // Возвращаем старое значение
+                    }
+                }
+            });
+        });
+        
+        document.querySelectorAll('.balance-input').forEach(input => {
+            input.addEventListener('change', async (e) => {
+                const userId = e.target.dataset.user;
+                const newBalance = parseInt(e.target.value);
+                
+                if (isNaN(newBalance)) {
+                    alert('Введите корректное число');
+                    return;
+                }
+                
+                if (confirm(`Изменить баланс пользователя на ${newBalance}?`)) {
+                    try {
+                        await db.collection('users').doc(userId).update({
+                            balance: newBalance
+                        });
+                        
+                        // Создаем транзакцию
+                        await db.collection('transactions').add({
+                            userId: userId,
+                            amount: newBalance,
+                            type: 'admin_adjustment',
+                            description: 'Корректировка баланса администратором',
+                            createdBy: currentUser.uid,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        
+                        alert('✅ Баланс обновлен');
+                    } catch (error) {
+                        alert('❌ Ошибка: ' + error.message);
+                    }
+                }
+            });
+        });
+        
+    } catch (error) {
+        console.error('Ошибка загрузки пользователей:', error);
+        document.getElementById('usersTableBody').innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; color: #f44336;">
+                    Ошибка загрузки данных
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК АДМИН-ПАНЕЛИ
+async function switchAdminTab(tabName) {
+    // Обновляем активные кнопки
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Скрываем все вкладки
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.classList.remove('active');
+    });
+    
+    // Показываем выбранную вкладку
+    document.getElementById(`adminTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+    
+    // Загружаем данные для вкладки
+    switch(tabName) {
+        case 'users':
+            await loadAdminUsers();
+            break;
+        case 'trainings':
+            await loadAdminTrainings();
+            break;
+        case 'transactions':
+            await loadAdminTransactions();
+            break;
+        case 'reports':
+            await loadAdminReports();
+            break;
+        case 'settings':
+            await loadAdminSettings();
+            break;
+    }
+}
+
+// ЗАГРУЗКА ТРЕНИРОВОК ДЛЯ АДМИНА
+async function loadAdminTrainings() {
+    try {
+        const trainingsSnapshot = await db.collection('trainings')
+            .orderBy('date', 'desc')
+            .limit(50)
+            .get();
+        
+        const container = document.getElementById('adminTrainingsList');
+        let html = `
+            <div style="margin-bottom: 20px;">
+                <button onclick="adminCreateTraining()" class="btn-primary">
+                    <i class="fas fa-plus"></i> Создать тренировку
+                </button>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f8f9fa;">
+                        <th style="padding: 12px; text-align: left;">Название</th>
+                        <th style="padding: 12px; text-align: left;">Дата</th>
+                        <th style="padding: 12px; text-align: left;">Тренер</th>
+                        <th style="padding: 12px; text-align: left;">Цена</th>
+                        <th style="padding: 12px; text-align: left;">Статус</th>
+                        <th style="padding: 12px; text-align: left;">Участники</th>
+                        <th style="padding: 12px; text-align: left;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        trainingsSnapshot.forEach(doc => {
+            const training = doc.data();
+            const date = training.date?.toDate() || new Date();
+            
+            html += `
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">${training.title || '-'}</td>
+                    <td style="padding: 10px;">${date.toLocaleDateString()}</td>
+                    <td style="padding: 10px;">${training.trainerName || '-'}</td>
+                    <td style="padding: 10px;">${training.price || 0} баллов</td>
+                    <td style="padding: 10px;">
+                        ${training.cancelled ? 
+                            '<span style="color: #f44336;">Отменена</span>' : 
+                            '<span style="color: #4CAF50;">Активна</span>'}
+                    </td>
+                    <td style="padding: 10px;">
+                        <button onclick="viewTrainingParticipants('${doc.id}')" class="btn-sm">
+                            <i class="fas fa-users"></i> Показать
+                        </button>
+                    </td>
+                    <td style="padding: 10px;">
+                        <button onclick="editTrainingAsAdmin('${doc.id}')" class="btn-sm" style="margin-right: 5px;">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="deleteTrainingAsAdmin('${doc.id}')" class="btn-sm btn-danger">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Ошибка загрузки тренировок:', error);
+        document.getElementById('adminTrainingsList').innerHTML = '<p style="color: #f44336;">Ошибка загрузки данных</p>';
+    }
+}
+
+// РЕДАКТИРОВАНИЕ ТРЕНИРОВКИ АДМИНОМ
+async function editTrainingAsAdmin(trainingId) {
+    // Реализация аналогична editTraining, но с расширенными правами
+    alert('Редактирование тренировки админом - функция в разработке');
+}
+
+// ДОБАВЛЯЕМ КНОПКУ АДМИН-ПАНЕЛИ В НАВИГАЦИЮ
+function addAdminButton() {
+    if (!isAdmin()) return;
+    
+    const bottomNav = document.querySelector('.bottom-nav');
+    
+    const adminBtn = document.createElement('div');
+    adminBtn.className = 'nav-btn';
+    adminBtn.innerHTML = `
+        <i class="fas fa-crown"></i>
+        <span>Админ</span>
+    `;
+    
+    adminBtn.onclick = () => {
+        if (!document.getElementById('adminScreen')) {
+            loadAdminPanel();
+        }
+        showScreen('admin');
+    };
+    
+    bottomNav.appendChild(adminBtn);
+}
+
+// ОБНОВЛЯЕМ ИНИЦИАЛИЗАЦИЮ ПРИ АВТОРИЗАЦИИ
+const originalUpdateUI = updateUI;
+updateUI = function() {
+    originalUpdateUI();
+    
+    if (isAdmin()) {
+        setTimeout(() => {
+            addAdminButton();
+        }, 500);
+    }
+};
+// АДАПТИВНЫЙ ДИЗАЙН
+const responsiveCSS = `
+<style>
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tab-buttons {
+        flex-wrap: wrap;
+    }
+    
+    .tab-btn {
+        flex: 1;
+        min-width: 120px;
+        justify-content: center;
+    }
+    
+    .training-card {
+        margin: 10px 0;
+    }
+    
+    table {
+        font-size: 14px;
+    }
+    
+    #trainingsFilters > div {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    #trainingsFilters input,
+    #trainingsFilters select {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .bottom-nav {
+        padding: 10px 5px;
+    }
+    
+    .nav-btn {
+        font-size: 12px;
+        padding: 8px 5px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 10px;
+        padding: 15px;
+    }
+}
+</style>
+`;
+
+document.head.insertAdjacentHTML('beforeend', responsiveCSS);
