@@ -1162,3 +1162,297 @@ document.addEventListener('DOMContentLoaded', function() {
     // Автофокус на поле email
     document.getElementById('loginEmail')?.focus();
 });
+// ============================================
+// 👨‍🏫 ФУНКЦИИ РЕДАКТИРОВАНИЯ ТРЕНИРОВОК
+// ============================================
+
+// ОТКРЫТЬ МОДАЛКУ УПРАВЛЕНИЯ ТРЕНИРОВКАМИ
+async function openManageTrainingsModal() {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может управлять тренировками');
+        return;
+    }
+    
+    try {
+        // Загрузить тренировки тренера
+        const trainingsSnapshot = await db.collection('trainings')
+            .where('trainerId', '==', currentUser.uid)
+            .orderBy('date', 'desc')
+            .limit(20)
+            .get();
+        
+        // Создаем модальное окно
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        let html = `
+            <div class="modal" style="background: white; padding: 20px; border-radius: 15px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                <h3><i class="fas fa-edit"></i> Управление тренировками</h3>
+        `;
+        
+        if (trainingsSnapshot.empty) {
+            html += '<p>У вас нет тренировок</p>';
+        } else {
+            html += `
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 10px; text-align: left;">Название</th>
+                            <th style="padding: 10px; text-align: left;">Дата</th>
+                            <th style="padding: 10px; text-align: left;">Цена</th>
+                            <th style="padding: 10px; text-align: left;">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            trainingsSnapshot.forEach(doc => {
+                const training = doc.data();
+                const date = training.date.toDate();
+                
+                html += `
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">${training.title}</td>
+                        <td style="padding: 10px;">${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                        <td style="padding: 10px;">${training.price || 0} баллов</td>
+                        <td style="padding: 10px;">
+                            <button onclick="editTraining('${doc.id}')" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; border-radius: 5px; margin-right: 5px; cursor: pointer;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteTraining('${doc.id}')" style="background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += `</tbody></table>`;
+        }
+        
+        html += `
+                <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="
+                        background: #667eea;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 10px;
+                        cursor: pointer;
+                    ">Закрыть</button>
+                </div>
+            </div>
+        `;
+        
+        modal.innerHTML = html;
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        alert('Ошибка загрузки тренировок: ' + error.message);
+    }
+}
+
+// РЕДАКТИРОВАТЬ ТРЕНИРОВКУ
+async function editTraining(trainingId) {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может редактировать тренировки');
+        return;
+    }
+    
+    try {
+        const trainingDoc = await db.collection('trainings').doc(trainingId).get();
+        if (!trainingDoc.exists) {
+            alert('Тренировка не найдена');
+            return;
+        }
+        
+        const training = trainingDoc.data();
+        const date = training.date.toDate();
+        
+        // Создаем модальное окно редактирования
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        // Форматируем дату для input[type="datetime-local"]
+        const formattedDate = date.toISOString().slice(0, 16);
+        
+        modal.innerHTML = `
+            <div class="modal" style="background: white; padding: 20px; border-radius: 15px; max-width: 500px; width: 90%;">
+                <h3><i class="fas fa-edit"></i> Редактировать тренировку</h3>
+                
+                <div style="margin-top: 15px;">
+                    <label>Название:</label>
+                    <input type="text" id="editTrainingTitle" value="${training.title || ''}" 
+                           style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label>Дата и время:</label>
+                    <input type="datetime-local" id="editTrainingDate" value="${formattedDate}" 
+                           style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label>Стоимость (баллы):</label>
+                    <input type="number" id="editTrainingPrice" value="${training.price || 0}" 
+                           style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label>Максимум участников:</label>
+                    <input type="number" id="editTrainingMax" value="${training.maxParticipants || ''}" 
+                           style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label>Описание:</label>
+                    <textarea id="editTrainingDesc" 
+                              style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px; height: 100px;">${training.description || ''}</textarea>
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button onclick="saveTrainingEdit('${trainingId}')" style="
+                        background: #4CAF50;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        flex: 1;
+                        cursor: pointer;
+                    ">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                    
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="
+                        background: #6c757d;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        flex: 1;
+                        cursor: pointer;
+                    ">
+                        Отмена
+                    </button>
+                    
+                    <button onclick="deleteTraining('${trainingId}')" style="
+                        background: #f44336;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        cursor: pointer;
+                    ">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        alert('Ошибка загрузки тренировки: ' + error.message);
+    }
+}
+
+// СОХРАНИТЬ ИЗМЕНЕНИЯ ТРЕНИРОВКИ
+async function saveTrainingEdit(trainingId) {
+    const title = document.getElementById('editTrainingTitle').value;
+    const date = document.getElementById('editTrainingDate').value;
+    const price = document.getElementById('editTrainingPrice').value;
+    const max = document.getElementById('editTrainingMax').value;
+    const desc = document.getElementById('editTrainingDesc').value;
+    
+    if (!title || !date || !price) {
+        alert('Заполните обязательные поля');
+        return;
+    }
+    
+    try {
+        await db.collection('trainings').doc(trainingId).update({
+            title: title,
+            date: firebase.firestore.Timestamp.fromDate(new Date(date)),
+            price: parseInt(price),
+            maxParticipants: max ? parseInt(max) : null,
+            description: desc || '',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        alert('✅ Тренировка обновлена!');
+        
+        // Закрыть все модальные окна
+        document.querySelectorAll('.modal-overlay').forEach(modal => modal.remove());
+        
+        // Обновить данные
+        loadTrainings();
+        
+    } catch (error) {
+        alert('❌ Ошибка обновления: ' + error.message);
+    }
+}
+
+// УДАЛИТЬ ТРЕНИРОВКУ
+async function deleteTraining(trainingId) {
+    if (!confirm('Удалить эту тренировку? Все записи на нее также будут удалены.')) {
+        return;
+    }
+    
+    try {
+        // Сначала проверяем, есть ли записи на тренировку
+        const registrationsSnapshot = await db.collection('registrations')
+            .where('trainingId', '==', trainingId)
+            .get();
+        
+        if (!registrationsSnapshot.empty) {
+            if (!confirm(`На эту тренировку записано ${registrationsSnapshot.size} человек. Все равно удалить?`)) {
+                return;
+            }
+        }
+        
+        // Удаляем тренировку
+        await db.collection('trainings').doc(trainingId).delete();
+        
+        // Удаляем связанные записи (опционально)
+        const batch = db.batch();
+        registrationsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        
+        alert('✅ Тренировка удалена!');
+        
+        // Закрыть все модальные окна
+        document.querySelectorAll('.modal-overlay').forEach(modal => modal.remove());
+        
+        // Обновить данные
+        loadTrainings();
+        
+    } catch (error) {
+        alert('❌ Ошибка удаления: ' + error.message);
+    }
+}
