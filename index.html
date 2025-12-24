@@ -3592,5 +3592,34 @@
     window.resetFilters = resetFilters;
     window.removeFilter = removeFilter;
     </script>
+    <script>
+    // Временный обработчик
+    document.addEventListener('DOMContentLoaded', function() {
+        const loginBtn = document.querySelector('button[onclick="login()"]');
+        const registerBtn = document.querySelector('button[onclick="register()"]');
+        
+        if (loginBtn) {
+            loginBtn.onclick = function() {
+                if (typeof window.login === 'function') {
+                    window.login();
+                } else {
+                    console.error('Функция login не определена');
+                    alert('Приложение загружается, подождите...');
+                }
+            };
+        }
+        
+        if (registerBtn) {
+            registerBtn.onclick = function() {
+                if (typeof window.register === 'function') {
+                    window.register();
+                } else {
+                    console.error('Функция register не определена');
+                    alert('Приложение загружается, подождите...');
+                }
+            };
+        }
+    });
+</script>
 </body>
 </html>
