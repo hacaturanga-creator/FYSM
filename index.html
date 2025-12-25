@@ -1698,101 +1698,145 @@
 
     // Загрузка тренировок
     async function loadTrainings(loadMore = false) {
-        if (!db) return;
+    if (!db) return;
+    
+    try {
+        const container = document.getElementById('trainingsList');
         
-        try {
-            const container = document.getElementById('trainingsList');
-            
-            if (!loadMore) {
-                container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
-                trainingsLastDoc = null;
-                trainingsHasMore = true;
-            }
-            
-            let query = db.collection('trainings');
-            
-            // Фильтр по статусу
-            query = query.where('status', '==', 'published');
-            
-            // Только будущие тренировки
-            const now = firebase.firestore.Timestamp.now();
-            query = query.where('date', '>=', now);
-            
-            // Сортировка
-            query = query.orderBy('date', 'asc');
-            
-            // Пагинация
-            if (trainingsLastDoc && loadMore) {
-                query = query.startAfter(trainingsLastDoc);
-            }
-            
-            query = query.limit(TRAININGS_PER_PAGE);
-            
-            const querySnapshot = await query.get();
-            
-            if (querySnapshot.empty && !loadMore) {
-                container.innerHTML = '<p class="text-center">Нет доступных тренировок</p>';
-                trainingsHasMore = false;
-                return;
-            }
-            
-            trainingsLastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
-            trainingsHasMore = querySnapshot.docs.length === TRAININGS_PER_PAGE;
-            
-            // Очищаем контейнер если первая загрузка
-            if (!loadMore) {
-                container.innerHTML = '';
-            }
-            
-            // Отображаем тренировки
-            for (const doc of querySnapshot.docs) {
-                await displayTrainingCard(doc, false);
-            }
-            
-            // Обновляем кнопку "Показать еще"
-            updateLoadMoreButton();
-            
-        } catch (error) {
-            console.error('Ошибка загрузки тренировок:', error);
-            document.getElementById('trainingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
+        if (!loadMore) {
+            container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+            trainingsLastDoc = null;
+            trainingsHasMore = true;
         }
-    }
-
-    // Загрузка черновиков тренировок
-    async function loadDraftTrainings() {
-        if (!db) return;
         
-        try {
-            const container = showingDrafts ? document.getElementById('trainingsList') : document.getElementById('draftsContainer');
-            if (!container) return;
-            
-            container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Загрузка черновиков...</div>';
-            
-            let query = db.collection('trainings')
-                .where('trainerId', '==', currentUser.uid)
-                .where('status', '==', 'draft')
-                .orderBy('createdAt', 'desc');
-            
-            const querySnapshot = await query.get();
-            
-            if (querySnapshot.empty) {
-                container.innerHTML = '<p class="text-center">Нет черновиков</p>';
-                return;
-            }
-            
+        let query = db.collection('trainings');
+        
+        // Альтернативный подход без сложных фильтров
+        const now = firebase.firestore.Timestamp.now();
+        
+        // Загружаем все тренировки, затем фильтруем на клиенте
+        query = query.orderBy('date', 'asc').limit(20);
+        
+        if (trainingsLastDoc && loadMore) {
+            query = query.startAfter(trainingsLastDoc);
+        }
+        
+        const querySnapshot = await query.get();
+        
+        if (querySnapshot.empty && !loadMore) {
+            container.innerHTML = '<p class="text-center">Нет доступных тренировок</p>';
+            trainingsHasMore = false;
+            return;
+        }
+        
+        trainingsLastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+        trainingsHasMore = querySnapshot.docs.length === 20;
+        
+        // Очищаем контейнер если первая загрузка
+        if (!loadMore) {
             container.innerHTML = '';
+        }
+        
+        // Фильтруем на клиенте
+        let displayedCount = 0;
+        
+        for (const doc of querySnapshot.docs) {
+            const training = doc.data();
             
-            for (const doc of querySnapshot.docs) {
-                await displayTrainingCard(doc, true);
+            // Фильтруем только опубликованные и будущие тренировки
+            if (training.status === 'published' && training.date.toDate() >= new Date()) {
+                await displayTrainingCard(doc, false);
+                displayedCount++;
             }
-            
-        } catch (error) {
-            console.error('Ошибка загрузки черновиков:', error);
-            const container = showingDrafts ? document.getElementById('trainingsList') : document.getElementById('draftsContainer');
-            container.innerHTML = '<p class="text-center">Ошибка загрузки черновиков</p>';
+        }
+        
+        // Если после фильтрации ничего не осталось
+        if (!loadMore && displayedCount === 0) {
+            container.innerHTML = '<p class="text-center">Нет доступных тренировок</p>';
+            trainingsHasMore = false;
+            return;
+        }
+        
+        // Обновляем кнопку "Показать еще"
+        updateLoadMoreButton();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки тренировок:', error);
+        
+        // Если ошибка из-за индекса, используем альтернативный метод
+        if (error.code === 'failed-precondition') {
+            await loadTrainingsAlternative();
+        } else {
+            document.getElementById('trainingsList').innerHTML = `
+                <p class="text-center" style="color: #dc3545;">
+                    <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки тренировок
+                </p>
+                <p class="text-center">
+                    <button onclick="loadTrainings()" class="btn-secondary">
+                        <i class="fas fa-redo"></i> Попробовать снова
+                    </button>
+                </p>
+            `;
         }
     }
+}
 
+// Альтернативный метод загрузки тренировок
+async function loadTrainingsAlternative() {
+    try {
+        const container = document.getElementById('trainingsList');
+        container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Альтернативная загрузка...</div>';
+        
+        // Загружаем все тренировки
+        const querySnapshot = await db.collection('trainings').get();
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<p class="text-center">Нет тренировок</p>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        
+        // Фильтруем и сортируем на клиенте
+        const trainings = [];
+        const now = new Date();
+        
+        querySnapshot.forEach(doc => {
+            const training = doc.data();
+            training.id = doc.id;
+            trainings.push(training);
+        });
+        
+        // Сортируем по дате (сначала будущие)
+        trainings.sort((a, b) => {
+            const dateA = a.date.toDate();
+            const dateB = b.date.toDate();
+            return dateA - dateB;
+        });
+        
+        // Отображаем только опубликованные и будущие тренировки
+        let displayedCount = 0;
+        for (const training of trainings) {
+            if (training.status === 'published' && training.date.toDate() >= now && displayedCount < 10) {
+                const mockDoc = {
+                    id: training.id,
+                    data: () => training
+                };
+                await displayTrainingCard(mockDoc, false);
+                displayedCount++;
+            }
+        }
+        
+        if (displayedCount === 0) {
+            container.innerHTML = '<p class="text-center">Нет доступных тренировок</p>';
+        }
+        
+    } catch (error) {
+        console.error('Ошибка альтернативной загрузки:', error);
+        document.getElementById('trainingsList').innerHTML = 
+            '<p class="text-center">Ошибка загрузки тренировок</p>';
+    }
+}
     // Отображение карточки тренировки
     async function displayTrainingCard(doc, isDraft = false) {
         const training = doc.data();
