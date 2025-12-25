@@ -3,12 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FYSM - Бронирование тренировок</title>
-    
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <title>FitBook - Бронирование тренировок</title>
     
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1070,6 +1065,11 @@
         </div>
     </div>
 
+    <!-- Firebase SDK (в конце body для правильной загрузки) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
     <script>
     // ============================================
     // FITBOOK - ПОЛНОЕ ПРИЛОЖЕНИЕ
@@ -1085,9 +1085,10 @@
     let trainingsHasMore = true;
     const TRAININGS_PER_PAGE = 10;
 
-    // Объявляем переменные для Firebase (они будут инициализированы позже)
+    // Firebase переменные
     let auth = null;
     let db = null;
+    let firebaseApp = null;
 
     // ============================================
     // 🔐 ОСНОВНЫЕ ФУНКЦИИ АВТОРИЗАЦИИ
@@ -1150,8 +1151,19 @@
         }
     }
 
+    // Проверка инициализации Firebase
+    function checkFirebaseInitialized() {
+        if (!auth || !db) {
+            alert('Приложение еще не загрузилось. Пожалуйста, подождите...');
+            return false;
+        }
+        return true;
+    }
+
     // Регистрация
     async function register() {
+        if (!checkFirebaseInitialized()) return;
+        
         const email = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
         
@@ -1181,6 +1193,8 @@
 
     // Вход
     async function login() {
+        if (!checkFirebaseInitialized()) return;
+        
         const email = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
         
@@ -1197,6 +1211,8 @@
 
     // Выход
     async function logout() {
+        if (!checkFirebaseInitialized()) return;
+        
         if (confirm('Выйти?')) {
             showLoading(true);
             await auth.signOut();
@@ -1206,7 +1222,7 @@
 
     // Загрузка данных пользователя
     async function loadUserData() {
-        if (!currentUser) return;
+        if (!currentUser || !db) return;
         
         try {
             showLoading(true);
@@ -1265,6 +1281,8 @@
 
     // Загрузка тренировок
     async function loadTrainings(loadMore = false) {
+        if (!db) return;
+        
         try {
             const container = document.getElementById('trainingsList');
             
@@ -1389,6 +1407,8 @@
 
     // Просмотр деталей тренировки
     async function viewTrainingDetails(trainingId) {
+        if (!db) return;
+        
         try {
             const trainingDoc = await db.collection('trainings').doc(trainingId).get();
             if (!trainingDoc.exists) {
@@ -1515,7 +1535,7 @@
 
     // Инициализация уведомлений
     async function initNotifications() {
-        if (!currentUser) return;
+        if (!currentUser || !db) return;
         
         // Останавливаем предыдущий слушатель
         if (notificationsListener) {
@@ -1546,6 +1566,8 @@
 
     // Загрузка уведомлений
     async function loadNotifications() {
+        if (!db) return;
+        
         try {
             const querySnapshot = await db.collection('notifications')
                 .where('userId', '==', currentUser.uid)
@@ -1666,6 +1688,8 @@
 
     // Открытие уведомления
     async function openNotification(notificationId, type, trainingId) {
+        if (!db) return;
+        
         try {
             await db.collection('notifications').doc(notificationId).update({
                 read: true,
@@ -1697,6 +1721,8 @@
 
     // Создание уведомления
     async function createNotification(userId, type, data = {}) {
+        if (!db) return;
+        
         try {
             const notificationData = {
                 userId: userId,
@@ -1715,8 +1741,6 @@
 
     // Показ тоста
     function showNotificationToast(notification) {
-        console.log('Показываем toast уведомление:', notification);
-        
         const toast = document.createElement('div');
         toast.className = 'notification-toast';
         toast.style.cssText = `
@@ -1771,6 +1795,8 @@
 
     // Обновление бэйджа
     async function updateNotificationBadge() {
+        if (!db) return;
+        
         try {
             const unreadCount = await db.collection('notifications')
                 .where('userId', '==', currentUser.uid)
@@ -1800,6 +1826,8 @@
 
     // Отметить все как прочитанные
     async function markAllAsRead() {
+        if (!db) return;
+        
         try {
             const snapshot = await db.collection('notifications')
                 .where('userId', '==', currentUser.uid)
@@ -1831,6 +1859,8 @@
 
     // Загрузка транзакций
     async function loadTransactions() {
+        if (!db) return;
+        
         try {
             showLoading(true);
             const querySnapshot = await db.collection('transactions')
@@ -1894,6 +1924,8 @@
 
     // Загрузка записей пользователя
     async function loadMyBookings() {
+        if (!db) return;
+        
         try {
             showLoading(true);
             const querySnapshot = await db.collection('registrations')
@@ -1970,6 +2002,8 @@
 
     // Загрузка оценок пользователя
     async function loadMyRatings() {
+        if (!db) return;
+        
         try {
             showLoading(true);
             const querySnapshot = await db.collection('ratings')
@@ -2045,7 +2079,7 @@
 
     // Статистика тренера
     async function loadTrainerStats() {
-        if (userData?.role !== 'trainer') {
+        if (!userData || userData.role !== 'trainer' || !db) {
             document.getElementById('trainerStats').innerHTML = `
                 <div class="text-center" style="padding: 40px; color: #666;">
                     <i class="fas fa-lock" style="font-size: 48px; margin-bottom: 20px;"></i>
@@ -2150,7 +2184,7 @@
 
     // Открытие модального окна создания тренировки
     function openCreateTrainingModal() {
-        if (userData?.role !== 'trainer') {
+        if (!userData || userData.role !== 'trainer') {
             alert('Только тренер может создавать тренировки');
             return;
         }
@@ -2167,7 +2201,7 @@
 
     // Создание тренировки
     async function createTraining() {
-        if (userData.role !== 'trainer') {
+        if (!userData || userData.role !== 'trainer' || !db) {
             alert('Только тренер может создавать тренировки');
             return;
         }
@@ -2264,7 +2298,7 @@
 
     // Открытие модального окна отметки присутствия
     async function openAttendanceModal() {
-        if (userData?.role !== 'trainer') {
+        if (!userData || userData.role !== 'trainer' || !db) {
             alert('❌ Только тренер может отмечать присутствие.');
             return;
         }
@@ -2412,6 +2446,8 @@
 
     // Сохранение отметок присутствия
     async function saveAttendance() {
+        if (!db) return;
+        
         try {
             const checkboxes = document.querySelectorAll('#attendanceUsers input[type="checkbox"]:checked:not(:disabled)');
             const trainingId = document.getElementById('attendanceTraining').value;
@@ -2492,7 +2528,7 @@
 
     // Открытие модального окна начисления баллов
     async function openAdjustBalanceModal() {
-        if (userData.role !== 'trainer') {
+        if (!userData || userData.role !== 'trainer' || !db) {
             alert('Только тренер может начислять баллы');
             return;
         }
@@ -2525,6 +2561,8 @@
 
     // Сохранение изменения баланса
     async function saveBalanceAdjustment() {
+        if (!db) return;
+        
         const userId = document.getElementById('balanceUser').value;
         const amount = parseInt(document.getElementById('balanceAdjustAmount').value);
         const reason = document.getElementById('balanceReason').value.trim();
@@ -2584,7 +2622,7 @@
 
     // Открытие модального окна оценок
     async function openRateUsersModal() {
-        if (userData.role !== 'trainer') {
+        if (!userData || userData.role !== 'trainer' || !db) {
             alert('Только тренер может оценивать участников');
             return;
         }
@@ -2628,6 +2666,8 @@
 
     // Загрузка участников тренировки для оценки
     async function loadTrainingParticipants() {
+        if (!db) return;
+        
         const trainingId = document.getElementById('ratingTraining').value;
         
         if (!trainingId) {
@@ -2720,6 +2760,8 @@
 
     // Сохранение оценок
     async function saveRatings() {
+        if (!db) return;
+        
         const trainingId = document.getElementById('ratingTraining').value;
         if (!trainingId) {
             alert('Выберите тренировку');
@@ -2799,7 +2841,7 @@
 
     // Редактирование тренировки
     async function editTraining(trainingId) {
-        if (userData.role !== 'trainer') {
+        if (!userData || userData.role !== 'trainer' || !db) {
             alert('Только тренер может редактировать тренировки');
             return;
         }
@@ -2914,6 +2956,8 @@
 
     // Сохранение редактирования тренировки
     async function saveTrainingEdit(trainingId) {
+        if (!db) return;
+        
         const title = document.getElementById('editTrainingTitle').value;
         const date = document.getElementById('editTrainingDate').value;
         const price = document.getElementById('editTrainingPrice').value;
@@ -2953,6 +2997,8 @@
 
     // Отмена тренировки
     async function cancelTraining(trainingId) {
+        if (!db) return;
+        
         if (!confirm('Отменить эту тренировку? Все записавшиеся получат уведомление и возврат баллов.')) {
             return;
         }
@@ -3038,7 +3084,7 @@
 
     // Подтверждение записи
     async function confirmRegistration() {
-        if (!selectedTrainingId || !userData) return;
+        if (!selectedTrainingId || !userData || !db) return;
         
         if (userData.balance < selectedTrainingPrice) {
             alert(`❌ Недостаточно баллов! Нужно: ${selectedTrainingPrice}, у вас: ${userData.balance}`);
@@ -3176,7 +3222,7 @@
 
     // Загрузка графиков посещений
     async function loadAttendanceCharts() {
-        if (!userData || userData.role !== 'trainer') return;
+        if (!userData || userData.role !== 'trainer' || !db) return;
         
         try {
             showLoading(true);
@@ -3391,53 +3437,87 @@
 
     // Инициализация Firebase и приложения
     function initApp() {
-        // Конфигурация Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyD5gplXXpP69H0f0WDQehy4jLOOTnw2rZQ",
-            authDomain: "fysm-2d26a.firebaseapp.com",
-            projectId: "fysm-2d26a",
-            storageBucket: "fysm-2d26a.firebasestorage.app",
-            messagingSenderId: "1013209595020",
-            appId: "1:1013209595020:web:5057a63c94dbf29aa4cfa9"
-        };
+        // Проверяем, загружены ли скрипты Firebase
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase не загружен');
+            alert('Ошибка загрузки Firebase. Пожалуйста, проверьте подключение к интернету.');
+            return;
+        }
 
-        // Инициализация Firebase
-        firebase.initializeApp(firebaseConfig);
-        auth = firebase.auth();
-        db = firebase.firestore();
+        try {
+            // Конфигурация Firebase
+            const firebaseConfig = {
+                apiKey: "AIzaSyD5gplXXpP69H0f0WDQehy4jLOOTnw2rZQ",
+                authDomain: "fysm-2d26a.firebaseapp.com",
+                projectId: "fysm-2d26a",
+                storageBucket: "fysm-2d26a.firebasestorage.app",
+                messagingSenderId: "1013209595020",
+                appId: "1:1013209595020:web:5057a63c94dbf29aa4cfa9"
+            };
 
-        console.log('Firebase инициализирован');
+            // Инициализация Firebase
+            firebaseApp = firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            db = firebase.firestore();
 
-        // Проверка аутентификации
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                currentUser = user;
-                await loadUserData();
-                await initNotifications();
-                
-                showScreen('schedule');
-                
-                // Показываем приветствие
-                setTimeout(() => {
-                    showNotificationToast({
-                        type: 'system',
-                        message: `Добро пожаловать, ${userData?.name || 'Пользователь'}!`,
-                        createdAt: new Date()
-                    });
-                }, 1000);
-            } else {
-                currentUser = null;
-                userData = null;
-                showScreen('login');
-                document.querySelector('.bottom-nav').style.display = 'none';
-            }
-        });
+            console.log('Firebase успешно инициализирован');
+
+            // Проверка аутентификации
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    currentUser = user;
+                    await loadUserData();
+                    await initNotifications();
+                    
+                    showScreen('schedule');
+                    
+                    // Показываем приветствие
+                    setTimeout(() => {
+                        showNotificationToast({
+                            type: 'system',
+                            message: `Добро пожаловать, ${userData?.name || 'Пользователь'}!`,
+                            createdAt: new Date()
+                        });
+                    }, 1000);
+                } else {
+                    currentUser = null;
+                    userData = null;
+                    showScreen('login');
+                    document.querySelector('.bottom-nav').style.display = 'none';
+                }
+            });
+
+        } catch (error) {
+            console.error('Ошибка инициализации Firebase:', error);
+            alert('Ошибка инициализации приложения: ' + error.message);
+        }
     }
 
     // Инициализация при загрузке
     document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM загружен, инициализируем приложение...');
         initNavigation();
-        initApp();
+        
+        // Ждем загрузки всех скриптов Firebase
+        if (typeof firebase !== 'undefined') {
+            initApp();
+        } else {
+            // Если Firebase еще не загружен, ждем
+            const checkFirebase = setInterval(() => {
+                if (typeof firebase !== 'undefined') {
+                    clearInterval(checkFirebase);
+                    initApp();
+                }
+            }, 100);
+            
+            // Таймаут через 5 секунд
+            setTimeout(() => {
+                clearInterval(checkFirebase);
+                if (typeof firebase === 'undefined') {
+                    alert('Не удалось загрузить Firebase. Пожалуйста, обновите страницу.');
+                }
+            }, 5000);
+        }
         
         console.log('FitBook инициализирован');
     });
