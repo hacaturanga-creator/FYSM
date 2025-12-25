@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FitBook - Фитнес Бронирование</title>
+    <title>FYSM -  Бронирование</title>
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -1719,7 +1719,27 @@
             console.error('Ошибка загрузки уведомлений:', error);
         }
     }
-
+// Проверка уведомлений (добавьте эту функцию)
+async function checkNotifications() {
+    try {
+        const notificationsSnapshot = await db.collection('notifications')
+            .where('userId', '==', currentUser.uid)
+            .orderBy('createdAt', 'desc')
+            .limit(5)
+            .get();
+        
+        console.log('Уведомления пользователя:', notificationsSnapshot.size);
+        
+        notificationsSnapshot.forEach(doc => {
+            console.log('Уведомление:', doc.id, doc.data());
+        });
+        
+        return notificationsSnapshot.size;
+    } catch (error) {
+        console.error('Ошибка проверки уведомлений:', error);
+        return 0;
+    }
+}
     // Вспомогательные функции уведомлений
     function getNotificationIcon(type) {
         switch(type) {
@@ -2271,107 +2291,113 @@
     }
 
     // Открытие модального окна создания тренировки
-    function openCreateTrainingModal() {
-        if (userData.role !== 'trainer') {
-            alert('Только тренер может создавать тренировки');
-            return;
-        }
-        
-        // Устанавливаем минимальную дату (сегодня)
-        const now = new Date();
-        const minDate = now.toISOString().slice(0, 16);
-        document.getElementById('trainingDate').min = minDate;
-        
-        // Устанавливаем дефолтное значение даты (завтра в это же время)
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        document.getElementById('trainingDate').value = tomorrow.toISOString().slice(0, 16);
-        
-        openModal('createTrainingModal');
+    // Создание тренировки - ИСПРАВЛЕННАЯ ВЕРСИЯ
+async function createTraining() {
+    if (userData.role !== 'trainer') {
+        alert('Только тренер может создавать тренировки');
+        return;
     }
-
-    // Создание тренировки
-    async function createTraining() {
-        if (userData.role !== 'trainer') {
-            alert('Только тренер может создавать тренировки');
-            return;
-        }
-        
-        const title = document.getElementById('trainingTitle').value;
-        const date = document.getElementById('trainingDate').value;
-        const price = parseInt(document.getElementById('trainingPrice').value) || 0;
-        const max = document.getElementById('trainingMax').value;
-        const desc = document.getElementById('trainingDesc').value;
-        
-        if (!title || !date) {
-            alert('Заполните обязательные поля');
-            return;
-        }
-        
-        if (price < 0) {
-            alert('Стоимость не может быть отрицательной');
-            return;
-        }
-        
-        try {
-            showLoading(true);
-            
-            const trainingData = {
-                title: title,
-                date: firebase.firestore.Timestamp.fromDate(new Date(date)),
-                price: price,
-                trainerId: currentUser.uid,
-                trainerName: userData.name,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                cancelled: false
-            };
-            
-            if (max && parseInt(max) > 0) {
-                trainingData.maxParticipants = parseInt(max);
-            }
-            if (desc) {
-                trainingData.description = desc;
-            }
-            
-            const trainingRef = await db.collection('trainings').add(trainingData);
-            
-            // Уведомляем всех пользователей
-            const usersSnapshot = await db.collection('users').get();
-            const notificationPromises = [];
-            
-            usersSnapshot.forEach(doc => {
-                if (doc.id !== currentUser.uid && doc.data().role === 'user') {
-                    notificationPromises.push(
-                        createNotification(doc.id, 'training_created', {
-                            message: `Новая тренировка: "${title}" за ${price} баллов`,
-                            trainingId: trainingRef.id
-                        })
-                    );
-                }
-            });
-            
-            await Promise.all(notificationPromises);
-            
-            showLoading(false);
-            alert('✅ Тренировка создана!');
-            closeModal('createTrainingModal');
-            
-            // Очищаем форму
-            document.getElementById('trainingTitle').value = '';
-            document.getElementById('trainingDate').value = '';
-            document.getElementById('trainingPrice').value = '';
-            document.getElementById('trainingMax').value = '';
-            document.getElementById('trainingDesc').value = '';
-            
-            // Обновляем список тренировок
-            loadTrainings();
-            
-        } catch (error) {
-            showLoading(false);
-            alert('❌ Ошибка: ' + error.message);
-        }
+    
+    const title = document.getElementById('trainingTitle').value;
+    const date = document.getElementById('trainingDate').value;
+    const price = parseInt(document.getElementById('trainingPrice').value) || 0;
+    const max = document.getElementById('trainingMax').value;
+    const desc = document.getElementById('trainingDesc').value;
+    
+    if (!title || !date) {
+        alert('Заполните обязательные поля');
+        return;
     }
-
+    
+    if (price < 0) {
+        alert('Стоимость не может быть отрицательной');
+        return;
+    }
+    
+    try {
+        showLoading(true);
+        
+        const trainingData = {
+            title: title,
+            date: firebase.firestore.Timestamp.fromDate(new Date(date)),
+            price: price,
+            trainerId: currentUser.uid,
+            trainerName: userData.name || userData.email,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            cancelled: false
+        };
+        
+        if (max && parseInt(max) > 0) {
+            trainingData.maxParticipants = parseInt(max);
+        }
+        if (desc) {
+            trainingData.description = desc;
+        }
+        
+        // 1. Создаем тренировку
+        const trainingRef = await db.collection('trainings').add(trainingData);
+        console.log('✅ Тренировка создана с ID:', trainingRef.id);
+        
+        // 2. Получаем всех пользователей (кроме текущего)
+        const usersSnapshot = await db.collection('users')
+            .where('role', '==', 'user')
+            .get();
+        
+        console.log('Найдено пользователей для уведомлений:', usersSnapshot.size);
+        
+        // 3. Создаем уведомления для каждого пользователя
+        const notificationsPromises = [];
+        let notificationCount = 0;
+        
+        usersSnapshot.forEach(doc => {
+            if (doc.id !== currentUser.uid) {
+                notificationCount++;
+                notificationsPromises.push(
+                    db.collection('notifications').add({
+                        userId: doc.id,
+                        type: 'training_created',
+                        message: `Новая тренировка: "${title}" за ${price} баллов. Дата: ${new Date(date).toLocaleDateString()}`,
+                        trainingId: trainingRef.id,
+                        read: false,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    })
+                );
+            }
+        });
+        
+        // Ждем создания всех уведомлений
+        if (notificationsPromises.length > 0) {
+            await Promise.all(notificationsPromises);
+            console.log(`✅ Создано ${notificationCount} уведомлений`);
+        }
+        
+        // 4. Показываем toast-уведомление (для тестирования)
+        showNotificationToast({
+            type: 'training_created',
+            message: `Тренировка "${title}" создана! Отправлено ${notificationCount} уведомлений пользователям.`,
+            createdAt: new Date()
+        });
+        
+        showLoading(false);
+        alert(`✅ Тренировка создана! ${notificationCount} пользователей получили уведомления.`);
+        closeModal('createTrainingModal');
+        
+        // Очищаем форму
+        document.getElementById('trainingTitle').value = '';
+        document.getElementById('trainingDate').value = '';
+        document.getElementById('trainingPrice').value = '';
+        document.getElementById('trainingMax').value = '';
+        document.getElementById('trainingDesc').value = '';
+        
+        // Обновляем список тренировок
+        loadTrainings();
+        
+    } catch (error) {
+        showLoading(false);
+        console.error('❌ Ошибка создания тренировки:', error);
+        alert('❌ Ошибка: ' + error.message);
+    }
+}
     // Открытие модального окна отметки присутствия
     async function openAttendanceModal() {
         console.log('Функция openAttendanceModal вызвана. Роль пользователя:', userData?.role);
@@ -3728,29 +3754,35 @@
         });
     }
 
-    // Проверка аутентификации
-    auth.onAuthStateChanged(async (user) => {
-        if (user) {
-            currentUser = user;
-            await loadUserData();
-            await initNotifications();
-            showScreen('schedule');
-            
-            // Показываем приветствие
-            setTimeout(() => {
-                showNotificationToast({
-                    type: 'system',
-                    message: `Добро пожаловать, ${userData?.name || 'Пользователь'}!`,
-                    createdAt: new Date()
-                });
-            }, 1000);
-        } else {
-            currentUser = null;
-            userData = null;
-            showScreen('login');
-            document.querySelector('.bottom-nav').style.display = 'none';
-        }
-    });
+    
+  // Проверка аутентификации
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        currentUser = user;
+        await loadUserData();
+        await initNotifications();
+        
+        // Проверяем уведомления
+        const count = await checkNotifications();
+        console.log(`Всего уведомлений: ${count}`);
+        
+        showScreen('schedule');
+        
+        // Показываем приветствие
+        setTimeout(() => {
+            showNotificationToast({
+                type: 'system',
+                message: `Добро пожаловать, ${userData?.name || 'Пользователь'}! У вас ${count} уведомлений.`,
+                createdAt: new Date()
+            });
+        }, 1000);
+    } else {
+        currentUser = null;
+        userData = null;
+        showScreen('login');
+        document.querySelector('.bottom-nav').style.display = 'none';
+    }
+});
 
     // Инициализация при загрузке
     document.addEventListener('DOMContentLoaded', function() {
