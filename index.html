@@ -626,6 +626,44 @@
             display: block;
         }
 
+        /* Стили для участников тренировки */
+        .participants-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .participant-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .participant-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .participant-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         /* Утилиты */
         .hidden {
             display: none !important;
@@ -804,6 +842,10 @@
             .nav-btn i {
                 font-size: 18px;
             }
+
+            .participants-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            }
         }
 
         @media (max-width: 480px) {
@@ -839,6 +881,10 @@
             .nav-btn i {
                 font-size: 16px;
             }
+
+            .participants-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -855,7 +901,7 @@
         <!-- Экран логина -->
         <div id="loginScreen" class="screen active">
             <div class="login-container">
-                <h2><i class="fas fa-dumbbell"></i> FYSM</h2>
+                <h2><i class="fas fa-dumbbell"></i> FitBook</h2>
                 
                 <div class="form-group">
                     <label for="loginEmail">Email</label>
@@ -1537,7 +1583,7 @@
     }
 
     // ============================================
-    // 📄 ЗАГРУЗКА ТРЕНИРОВОК
+    // 📄 ЗАГРУЗКА ТРЕНИРОВОК С УЧАСТНИКАМИ
     // ============================================
 
     // Показать опубликованные тренировки
@@ -1560,13 +1606,13 @@
         loadDraftTrainings();
     }
 
-    // Загрузка тренировок
+    // Загрузка тренировок с участниками
     async function loadTrainings() {
         if (!db) return;
         
         try {
             const container = document.getElementById('trainingsList');
-            container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Загрузка тренировок и участников...</div>';
             
             // Загружаем все тренировки и фильтруем на клиенте
             const querySnapshot = await db.collection('trainings').get();
@@ -1596,13 +1642,13 @@
                 return dateA - dateB;
             });
             
-            // Отображаем только опубликованные и будущие тренировки
+            // Загружаем участников для каждой тренировки и отображаем
             for (const training of trainings) {
                 const date = training.date?.toDate() || new Date();
                 const isPast = date < now;
                 
                 if (training.status === 'published' && !isPast) {
-                    await displayTrainingCard(training, false);
+                    await displayTrainingCardWithParticipants(training, false);
                     hasTrainings = true;
                 }
             }
@@ -1676,8 +1722,8 @@
         }
     }
 
-    // Отображение карточки тренировки
-    async function displayTrainingCard(training, isDraft = false) {
+    // Отображение карточки тренировки с участниками
+    async function displayTrainingCardWithParticipants(training, isDraft = false) {
         const date = training.date?.toDate() || new Date();
         const isPast = date < new Date();
         
@@ -1696,10 +1742,10 @@
             }
         }
         
-        const container = isDraft && !showingDrafts ? 
-            document.getElementById('draftsContainer') : 
-            document.getElementById('trainingsList');
+        // Загружаем участников тренировки
+        const participants = await loadTrainingParticipants(training.id);
         
+        const container = document.getElementById('trainingsList');
         if (!container) return;
         
         const card = document.createElement('div');
@@ -1769,10 +1815,12 @@
                                 ${(userData && userData.balance < (training.price || 0)) || 
                                   training.status === 'cancelled' || 
                                   training.status === 'draft' || 
-                                  isPast ? 'disabled' : ''}>
+                                  isPast || 
+                                  (training.maxParticipants && participants.length >= training.maxParticipants) ? 'disabled' : ''}>
                             <i class="fas fa-calendar-plus"></i> ${training.status === 'cancelled' ? 'Отменена' : 
                                                                     training.status === 'draft' ? 'Черновик' :
-                                                                    isPast ? 'Прошла' : 'Записаться'}
+                                                                    isPast ? 'Прошла' : 
+                                                                    (training.maxParticipants && participants.length >= training.maxParticipants) ? 'Нет мест' : 'Записаться'}
                         </button>
                         <button onclick="viewTrainingDetails('${training.id}')" class="btn-secondary" style="flex: 1;">
                             <i class="fas fa-info-circle"></i> Подробнее
@@ -1780,6 +1828,30 @@
                     </div>
                 `;
             }
+        }
+        
+        // Отображаем участников
+        let participantsHtml = '';
+        if (participants.length > 0) {
+            participantsHtml = `
+                <div style="margin-top: 15px;">
+                    <div style="font-weight: 600; margin-bottom: 8px; color: #666; font-size: 14px;">
+                        <i class="fas fa-users"></i> Уже записались (${participants.length}/${training.maxParticipants || '∞'}):
+                    </div>
+                    <div class="participants-grid">
+                        ${participants.map(participant => `
+                            <div class="participant-item">
+                                <div class="participant-avatar" title="${participant.name}">
+                                    ${participant.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div class="participant-name" title="${participant.name}">
+                                    ${participant.name}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
         }
         
         card.innerHTML = `
@@ -1800,12 +1872,99 @@
             ${training.description ? `<p>${training.description}</p>` : ''}
             ${training.trainerName ? `<p><small><i class="fas fa-user-tie"></i> ${training.trainerName}</small></p>` : ''}
             
+            ${participantsHtml}
+            
             <div class="mt-2">
                 ${actionsHtml}
             </div>
         `;
         
         container.appendChild(card);
+    }
+
+    // Простая карточка для черновиков (без участников)
+    function displayTrainingCard(training, isDraft = false) {
+        const date = training.date?.toDate() || new Date();
+        
+        const container = isDraft && !showingDrafts ? 
+            document.getElementById('draftsContainer') : 
+            document.getElementById('trainingsList');
+        
+        if (!container) return;
+        
+        const card = document.createElement('div');
+        card.className = 'training-card';
+        
+        card.style.borderLeft = '4px solid #ffc107';
+        card.style.opacity = '0.9';
+        
+        let actionsHtml = '';
+        if (userData && (userData.role === 'trainer' || userData.role === 'admin')) {
+            if (training.trainerId === currentUser.uid || userData.role === 'admin') {
+                actionsHtml = `
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="deleteDraft('${training.id}', '${training.title}')" class="btn-danger" style="flex: 1;">
+                            <i class="fas fa-trash"></i> Удалить черновик
+                        </button>
+                        <button onclick="publishTraining('${training.id}')" class="btn-success" style="flex: 1;">
+                            <i class="fas fa-eye"></i> Опубликовать
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        card.innerHTML = `
+            <div style="background: #ffc107; color: #212529; padding: 5px; border-radius: 5px; margin-bottom: 10px; text-align: center; font-size: 0.9em;">
+                📝 ЧЕРНОВИК
+            </div>
+            
+            <h3>${training.title || 'Без названия'}</h3>
+            <div class="training-meta">
+                <span><i class="far fa-calendar"></i> ${date.toLocaleDateString()}</span>
+                <span><i class="far fa-clock"></i> ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                <span><i class="fas fa-coins"></i> ${training.price || 0} баллов</span>
+                ${training.maxParticipants ? `<span><i class="fas fa-users"></i> до ${training.maxParticipants} чел.</span>` : ''}
+            </div>
+            ${training.description ? `<p>${training.description}</p>` : ''}
+            ${training.trainerName ? `<p><small><i class="fas fa-user-tie"></i> ${training.trainerName}</small></p>` : ''}
+            
+            <div class="mt-2">
+                ${actionsHtml}
+            </div>
+        `;
+        
+        container.appendChild(card);
+    }
+
+    // Загрузка участников тренировки
+    async function loadTrainingParticipants(trainingId) {
+        if (!db) return [];
+        
+        try {
+            const registrationsSnapshot = await db.collection('registrations')
+                .where('trainingId', '==', trainingId)
+                .get();
+            
+            const participants = [];
+            
+            for (const doc of registrationsSnapshot.docs) {
+                const reg = doc.data();
+                const userDoc = await db.collection('users').doc(reg.userId).get();
+                if (userDoc.exists) {
+                    const user = userDoc.data();
+                    participants.push({
+                        name: user.name || user.email.split('@')[0] || 'Пользователь',
+                        userId: reg.userId
+                    });
+                }
+            }
+            
+            return participants;
+        } catch (error) {
+            console.error('Ошибка загрузки участников:', error);
+            return [];
+        }
     }
 
     // ============================================
@@ -1943,7 +2102,7 @@
         }
     }
 
-    // Просмотр деталей тренировки
+    // Просмотр деталей тренировки с полным списком участников
     async function viewTrainingDetails(trainingId) {
         if (!db) return;
         
@@ -1958,22 +2117,7 @@
             const date = training.date.toDate();
             
             // Загружаем участников
-            const registrationsSnapshot = await db.collection('registrations')
-                .where('trainingId', '==', trainingId)
-                .get();
-            
-            const participants = [];
-            for (const doc of registrationsSnapshot.docs) {
-                const reg = doc.data();
-                const userDoc = await db.collection('users').doc(reg.userId).get();
-                if (userDoc.exists) {
-                    const user = userDoc.data();
-                    participants.push({
-                        name: user.name || user.email,
-                        attended: reg.attended || false
-                    });
-                }
-            }
+            const participants = await loadTrainingParticipants(trainingId);
             
             const modal = document.createElement('div');
             modal.className = 'modal';
@@ -1982,7 +2126,7 @@
             modal.style.justifyContent = 'center';
             
             modal.innerHTML = `
-                <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-content" style="max-width: 700px;">
                     <h3><i class="fas fa-info-circle"></i> ${training.title}</h3>
                     
                     <div style="margin-top: 15px;">
@@ -2001,9 +2145,18 @@
                         <div style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 10px;">
                             <strong>Участники (${participants.length}):</strong>
                             ${participants.length > 0 ? 
-                                `<ul style="margin-top: 10px; padding-left: 20px;">${participants.map(p => `
-                                    <li>${p.name} ${p.attended ? '✅' : '❌'}</li>
-                                `).join('')}</ul>` : 
+                                `<div class="participants-grid" style="margin-top: 10px;">
+                                    ${participants.map(p => `
+                                        <div class="participant-item">
+                                            <div class="participant-avatar" title="${p.name}">
+                                                ${p.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div class="participant-name" title="${p.name}">
+                                                ${p.name}
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>` : 
                                 '<p style="margin-top: 10px; color: #666;">Пока никто не записался</p>'}
                         </div>
                     </div>
