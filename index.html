@@ -1050,14 +1050,8 @@
                                 <button onclick="openAdjustBalanceModal()" class="btn-primary">
                                     <i class="fas fa-coins"></i> Начислить баллы
                                 </button>
-                                <button onclick="openRateUsersModal()" class="btn-primary">
-                                    <i class="fas fa-star"></i> Оценить участников
-                                </button>
                                 <button onclick="testTrainerNotifications()" class="btn-primary" style="background: #17a2b8;">
                                     <i class="fas fa-bell"></i> Тест уведомлений
-                                </button>
-                                <button onclick="openUserStatsModal()" class="btn-primary" style="background: #6f42c1;">
-                                    <i class="fas fa-chart-pie"></i> Статистика пользователей
                                 </button>
                             </div>
                         </div>
@@ -1194,7 +1188,7 @@
             
             <div class="form-actions">
                 <button onclick="saveAttendance()" class="btn-primary" id="saveAttendanceBtn" style="display: none;">
-                    <i class="fas fa-save"></i> Сохранить отметки
+                    <i class="fas fa-save"></i> Сохранить отметки и начислить баллы
                 </button>
                 <button onclick="closeModal('attendanceModal')" class="btn-secondary">Закрыть</button>
             </div>
@@ -1258,6 +1252,32 @@
         </div>
     </div>
 
+    <!-- Модальное окно подтверждения удаления -->
+    <div id="confirmDeleteModal" class="modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-trash"></i> Подтверждение удаления</h3>
+            <p id="deleteMessage">Вы уверены, что хотите удалить эту тренировку?</p>
+            
+            <div class="form-actions">
+                <button onclick="deleteDraftTraining()" class="btn-danger">Да, удалить</button>
+                <button onclick="closeModal('confirmDeleteModal')" class="btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно отмены записи -->
+    <div id="cancelBookingModal" class="modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-calendar-times"></i> Отмена записи</h3>
+            <p id="cancelBookingMessage">Вы уверены, что хотите отменить запись на эту тренировку?</p>
+            
+            <div class="form-actions">
+                <button onclick="confirmCancelBooking()" class="btn-danger">Да, отменить</button>
+                <button onclick="closeModal('cancelBookingModal')" class="btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
@@ -1273,8 +1293,10 @@
     let userData = null;
     let selectedTrainingId = null;
     let selectedTrainingPrice = 0;
+    let selectedRegistrationId = null;
     let notificationsListener = null;
     let showingDrafts = false;
+    let trainingToDelete = null;
 
     // Firebase переменные
     let auth = null;
@@ -1661,6 +1683,7 @@
         
         // Проверяем, записан ли пользователь
         let isRegistered = false;
+        let registrationId = null;
         if (currentUser) {
             const registrationSnapshot = await db.collection('registrations')
                 .where('userId', '==', currentUser.uid)
@@ -1668,6 +1691,9 @@
                 .limit(1)
                 .get();
             isRegistered = !registrationSnapshot.empty;
+            if (isRegistered) {
+                registrationId = registrationSnapshot.docs[0].id;
+            }
         }
         
         const container = isDraft && !showingDrafts ? 
@@ -1708,30 +1734,36 @@
             if (training.trainerId === currentUser.uid || userData.role === 'admin') {
                 actionsHtml = `
                     <div style="display: flex; gap: 10px;">
-                        <button onclick="editTraining('${training.id}')" class="btn-secondary" style="flex: 1;">
-                            <i class="fas fa-edit"></i> ${isDraft ? 'Редактировать' : 'Изменить'}
-                        </button>
-                        ${!isDraft && training.status !== 'cancelled' ? `
-                            <button onclick="cancelTraining('${training.id}')" class="btn-danger" style="flex: 1;">
-                                <i class="fas fa-ban"></i> Отменить
-                            </button>
-                        ` : ''}
                         ${isDraft ? `
+                            <button onclick="deleteDraft('${training.id}', '${training.title}')" class="btn-danger" style="flex: 1;">
+                                <i class="fas fa-trash"></i> Удалить черновик
+                            </button>
                             <button onclick="publishTraining('${training.id}')" class="btn-success" style="flex: 1;">
                                 <i class="fas fa-eye"></i> Опубликовать
                             </button>
-                        ` : ''}
+                        ` : `
+                            <button onclick="cancelTraining('${training.id}')" class="btn-danger" style="flex: 1;">
+                                <i class="fas fa-ban"></i> Отменить тренировку
+                            </button>
+                        `}
                     </div>
                 `;
             }
         } else {
-            actionsHtml = `
-                <div style="display: flex; gap: 10px;">
-                    ${isRegistered ? `
-                        <button class="btn-secondary" style="flex: 1;" disabled>
-                            <i class="fas fa-check"></i> Вы записаны
+            if (isRegistered) {
+                actionsHtml = `
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="cancelBooking('${training.id}', '${registrationId}', '${training.title}')" class="btn-danger" style="flex: 1;">
+                            <i class="fas fa-times"></i> Отменить запись
                         </button>
-                    ` : `
+                        <button onclick="viewTrainingDetails('${training.id}')" class="btn-secondary" style="flex: 1;">
+                            <i class="fas fa-info-circle"></i> Подробнее
+                        </button>
+                    </div>
+                `;
+            } else {
+                actionsHtml = `
+                    <div style="display: flex; gap: 10px;">
                         <button onclick="openRegisterModal('${training.id}', ${training.price || 0}, '${training.title}')" 
                                 class="btn-primary" style="flex: 1;"
                                 ${(userData && userData.balance < (training.price || 0)) || 
@@ -1742,12 +1774,12 @@
                                                                     training.status === 'draft' ? 'Черновик' :
                                                                     isPast ? 'Прошла' : 'Записаться'}
                         </button>
-                    `}
-                    <button onclick="viewTrainingDetails('${training.id}')" class="btn-secondary" style="flex: 1;">
-                        <i class="fas fa-info-circle"></i> Подробнее
-                    </button>
-                </div>
-            `;
+                        <button onclick="viewTrainingDetails('${training.id}')" class="btn-secondary" style="flex: 1;">
+                            <i class="fas fa-info-circle"></i> Подробнее
+                        </button>
+                    </div>
+                `;
+            }
         }
         
         card.innerHTML = `
@@ -1774,6 +1806,141 @@
         `;
         
         container.appendChild(card);
+    }
+
+    // ============================================
+    // 🗑️ УДАЛЕНИЕ ЧЕРНОВИКОВ
+    // ============================================
+
+    // Подтверждение удаления черновика
+    function deleteDraft(trainingId, trainingTitle) {
+        trainingToDelete = trainingId;
+        document.getElementById('deleteMessage').textContent = 
+            `Вы уверены, что хотите удалить черновик тренировки "${trainingTitle}"? Это действие нельзя отменить.`;
+        openModal('confirmDeleteModal');
+    }
+
+    // Удаление черновика
+    async function deleteDraftTraining() {
+        if (!db || !trainingToDelete) return;
+        
+        try {
+            showLoading(true);
+            
+            // Удаляем тренировку
+            await db.collection('trainings').doc(trainingToDelete).delete();
+            
+            showLoading(false);
+            alert('✅ Черновик удален!');
+            closeModal('confirmDeleteModal');
+            
+            // Обновляем список черновиков
+            loadDraftTrainings();
+            loadTrainerStats();
+            
+        } catch (error) {
+            showLoading(false);
+            alert('❌ Ошибка: ' + error.message);
+        }
+    }
+
+    // ============================================
+    // ❌ ОТМЕНА ЗАПИСИ ПОЛЬЗОВАТЕЛЕМ
+    // ============================================
+
+    // Открытие модального окна отмены записи
+    function cancelBooking(trainingId, registrationId, trainingTitle) {
+        selectedTrainingId = trainingId;
+        selectedRegistrationId = registrationId;
+        
+        document.getElementById('cancelBookingMessage').textContent = 
+            `Вы уверены, что хотите отменить запись на тренировку "${trainingTitle}"?`;
+        openModal('cancelBookingModal');
+    }
+
+    // Подтверждение отмены записи
+    async function confirmCancelBooking() {
+        if (!db || !selectedTrainingId || !selectedRegistrationId) return;
+        
+        try {
+            showLoading(true);
+            
+            // Получаем данные о записи
+            const registrationDoc = await db.collection('registrations').doc(selectedRegistrationId).get();
+            if (!registrationDoc.exists) {
+                throw new Error('Запись не найдена');
+            }
+            
+            const registration = registrationDoc.data();
+            
+            // Получаем данные о тренировке
+            const trainingDoc = await db.collection('trainings').doc(selectedTrainingId).get();
+            if (!trainingDoc.exists) {
+                throw new Error('Тренировка не найдена');
+            }
+            
+            const training = trainingDoc.data();
+            
+            // Удаляем запись
+            await db.collection('registrations').doc(selectedRegistrationId).delete();
+            
+            // Возвращаем баллы пользователю (только если не было подтверждения присутствия)
+            if (!registration.attended) {
+                await db.collection('users').doc(currentUser.uid).update({
+                    balance: firebase.firestore.FieldValue.increment(training.price || 0)
+                });
+                
+                // Создаем транзакцию возврата
+                await db.collection('transactions').add({
+                    userId: currentUser.uid,
+                    amount: training.price || 0,
+                    type: 'credit',
+                    description: `Возврат за отмену записи на тренировку: ${training.title}`,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Уведомляем тренера о возврате (если есть)
+                if (training.trainerId) {
+                    await db.collection('users').doc(training.trainerId).update({
+                        balance: firebase.firestore.FieldValue.increment(-(training.price || 0))
+                    });
+                    
+                    // Транзакция для тренера
+                    await db.collection('transactions').add({
+                        userId: training.trainerId,
+                        amount: training.price || 0,
+                        type: 'debit',
+                        description: `Возврат за отмену записи: ${training.title} (${userData.name || userData.email})`,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    // Уведомление для тренера
+                    await createNotification(training.trainerId, 'registration_cancelled', {
+                        message: `${userData.name || userData.email} отменил запись на тренировку "${training.title}"`,
+                        trainingId: selectedTrainingId,
+                        userId: currentUser.uid,
+                        userName: userData.name || userData.email
+                    });
+                }
+            }
+            
+            showLoading(false);
+            alert('✅ Запись отменена!' + (!registration.attended ? ' Баллы возвращены на ваш счет.' : ''));
+            closeModal('cancelBookingModal');
+            
+            // Обновляем данные пользователя
+            await loadUserData();
+            
+            // Обновляем интерфейс
+            loadTrainings();
+            if (document.getElementById('myBookingsScreen').classList.contains('active')) {
+                loadMyBookings();
+            }
+            
+        } catch (error) {
+            showLoading(false);
+            alert('❌ Ошибка: ' + error.message);
+        }
     }
 
     // Просмотр деталей тренировки
@@ -1967,6 +2134,7 @@
             case 'training_created': return 'fas fa-dumbbell';
             case 'training_cancelled': return 'fas fa-ban';
             case 'registration_confirmed': return 'fas fa-calendar-check';
+            case 'registration_cancelled': return 'fas fa-calendar-times';
             case 'attendance_confirmed': return 'fas fa-user-check';
             case 'balance_updated': return 'fas fa-coins';
             case 'rating_received': return 'fas fa-star';
@@ -1981,6 +2149,7 @@
             case 'training_created': return '#4CAF50';
             case 'training_cancelled': return '#f44336';
             case 'registration_confirmed': return '#2196F3';
+            case 'registration_cancelled': return '#FF9800';
             case 'attendance_confirmed': return '#FF9800';
             case 'balance_updated': return '#9C27B0';
             case 'rating_received': return '#FFC107';
@@ -1993,6 +2162,7 @@
             case 'training_created': return 'Новая тренировка';
             case 'training_cancelled': return 'Тренировка отменена';
             case 'registration_confirmed': return 'Запись подтверждена';
+            case 'registration_cancelled': return 'Запись отменена';
             case 'attendance_confirmed': return 'Посещение отмечено';
             case 'balance_updated': return 'Изменение баланса';
             case 'rating_received': return 'Новая оценка';
@@ -2008,6 +2178,7 @@
             case 'training_created': return 'Добавлена новая тренировка';
             case 'training_cancelled': return 'Тренировка была отменена';
             case 'registration_confirmed': return 'Ваша запись подтверждена';
+            case 'registration_cancelled': return 'Ваша запись отменена';
             case 'attendance_confirmed': return 'Ваше посещение отмечено';
             case 'balance_updated': return `Баланс изменен на ${notification.amount || 0} баллов`;
             case 'rating_received': return 'Вы получили новую оценку';
@@ -2319,6 +2490,7 @@
                             <th>Стоимость</th>
                             <th>Статус оплаты</th>
                             <th>Присутствие</th>
+                            <th>Действия</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2337,6 +2509,13 @@
                         <td>${training.price || 0} баллов</td>
                         <td><span class="status-badge ${statusClass}">${reg.charged ? '✅ Оплачено' : '❌ Не оплачено'}</span></td>
                         <td><span class="status-badge ${attendanceClass}">${reg.attended ? '✅ Присутствовал' : '❌ Не отмечено'}</span></td>
+                        <td>
+                            ${!reg.attended ? `
+                                <button onclick="cancelBooking('${training.id}', '${reg.id}', '${training.title}')" class="btn-danger" style="padding: 5px 10px; font-size: 12px;">
+                                    <i class="fas fa-times"></i> Отменить
+                                </button>
+                            ` : '-'}
+                        </td>
                     </tr>
                 `;
             });
@@ -2348,83 +2527,6 @@
             showLoading(false);
             console.error('Ошибка загрузки записей:', error);
             document.getElementById('myBookingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
-        }
-    }
-
-    // ============================================
-    // ⭐ ОЦЕНКИ
-    // ============================================
-
-    // Загрузка оценок пользователя
-    async function loadMyRatings() {
-        if (!db) return;
-        
-        try {
-            showLoading(true);
-            const querySnapshot = await db.collection('ratings')
-                .where('userId', '==', currentUser.uid)
-                .orderBy('createdAt', 'desc')
-                .limit(50)
-                .get();
-            
-            const container = document.getElementById('ratingsList');
-            
-            if (querySnapshot.empty) {
-                container.innerHTML = '<p class="text-center">Нет оценок от тренеров</p>';
-                showLoading(false);
-                return;
-            }
-            
-            const ratings = [];
-            querySnapshot.forEach(doc => {
-                const rating = doc.data();
-                rating.id = doc.id;
-                ratings.push(rating);
-            });
-            
-            const trainingPromises = ratings.map(rating => 
-                db.collection('trainings').doc(rating.trainingId).get()
-            );
-            
-            const trainingSnapshots = await Promise.all(trainingPromises);
-            
-            let html = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Тренировка</th>
-                            <th>Дата</th>
-                            <th>Оценка</th>
-                            <th>Комментарий</th>
-                            <th>Тренер</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            ratings.forEach((rating, index) => {
-                const training = trainingSnapshots[index].exists ? trainingSnapshots[index].data() : {};
-                const date = rating.createdAt?.toDate() || new Date();
-                const stars = '★'.repeat(rating.score) + '☆'.repeat(5 - rating.score);
-                
-                html += `
-                    <tr>
-                        <td>${training.title || 'Неизвестно'}</td>
-                        <td>${date.toLocaleDateString()}</td>
-                        <td><span style="color: gold; font-size: 1.2em;">${stars}</span> (${rating.score}/5)</td>
-                        <td>${rating.comment || 'Нет комментария'}</td>
-                        <td>${rating.trainerName || 'Тренер'}</td>
-                    </tr>
-                `;
-            });
-            
-            html += `</tbody></table>`;
-            container.innerHTML = html;
-            showLoading(false);
-        } catch (error) {
-            showLoading(false);
-            console.error('Ошибка загрузки оценок:', error);
-            document.getElementById('ratingsList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
         }
     }
 
@@ -2485,7 +2587,7 @@
                 totalParticipants += registrationsSnapshot.size;
                 
                 registrationsSnapshot.forEach(regDoc => {
-                    if (regDoc.data().charged) {
+                    if (regDoc.data().attended) {
                         totalRevenue += training.price || 0;
                     }
                 });
@@ -2510,7 +2612,7 @@
                         </div>
                         <div class="stat-info">
                             <div class="stat-value">${totalRevenue}</div>
-                            <div class="stat-label">Общий доход (баллы)</div>
+                            <div class="stat-label">Заработано баллов</div>
                         </div>
                     </div>
                     
@@ -2765,12 +2867,15 @@
                                    ${isChecked ? 'checked' : ''}
                                    data-registration="${reg.id}" 
                                    data-user="${reg.userId}"
+                                   data-charged="${reg.charged || false}"
                                    style="transform: scale(1.3); cursor: pointer;">
                             <div style="flex: 1;">
                                 <div style="font-weight: 600; margin-bottom: 5px;">${userName}</div>
                                 <div style="font-size: 0.9em; color: #666;">
                                     Статус: ${reg.willAttend ? '✅ Подтвердил участие' : '❓ Не подтвердил'}
                                     ${isChecked ? '<span style="color: #28a745; margin-left: 10px;">(уже отмечен)</span>' : ''}
+                                    ${reg.charged ? '<span style="color: #28a745; margin-left: 10px;">(баллы не списаны)</span>' : 
+                                                    '<span style="color: #dc3545; margin-left: 10px;">(баллы списаны)</span>'}
                                 </div>
                             </div>
                         </div>
@@ -2794,7 +2899,7 @@
         }
     }
 
-    // Сохранение отметок присутствия
+    // Сохранение отметок присутствия и списание баллов
     async function saveAttendance() {
         if (!db) return;
         
@@ -2818,10 +2923,12 @@
             
             const batch = db.batch();
             let updatedCount = 0;
+            let chargedCount = 0;
             
             for (const checkbox of checkboxes) {
                 const regId = checkbox.dataset.registration;
                 const userId = checkbox.dataset.user;
+                const alreadyCharged = checkbox.dataset.charged === 'true';
                 const isChecked = checkbox.checked;
                 
                 // Отмечаем присутствие
@@ -2831,13 +2938,63 @@
                     attendanceConfirmedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 
+                // Если отмечаем как присутствовавшего и баллы еще не списаны
+                if (isChecked && !alreadyCharged) {
+                    // Списание баллов у пользователя
+                    const userRef = db.collection('users').doc(userId);
+                    batch.update(userRef, {
+                        balance: firebase.firestore.FieldValue.increment(-(training.price || 0))
+                    });
+                    
+                    // Транзакция списания
+                    const transRef = db.collection('transactions').doc();
+                    batch.set(transRef, {
+                        userId: userId,
+                        amount: training.price || 0,
+                        type: 'debit',
+                        description: `Списание за посещение тренировки: ${training.title}`,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    // Начисление баллов тренеру
+                    if (training.trainerId) {
+                        const trainerRef = db.collection('users').doc(training.trainerId);
+                        batch.update(trainerRef, {
+                            balance: firebase.firestore.FieldValue.increment(training.price || 0)
+                        });
+                        
+                        // Транзакция начисления тренеру
+                        const trainerTransRef = db.collection('transactions').doc();
+                        batch.set(trainerTransRef, {
+                            userId: training.trainerId,
+                            amount: training.price || 0,
+                            type: 'credit',
+                            description: `Оплата за тренировку: ${training.title} (от ${userId})`,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                    
+                    // Отмечаем, что баллы списаны
+                    batch.update(regRef, {
+                        charged: true
+                    });
+                    
+                    chargedCount++;
+                    
+                    // Создаем уведомление для пользователя
+                    createNotification(userId, 'attendance_confirmed', {
+                        message: `Ваше посещение тренировки "${training.title}" подтверждено. Списано ${training.price || 0} баллов.`,
+                        trainingId: trainingId
+                    });
+                }
+                
                 updatedCount++;
             }
             
             await batch.commit();
             
             showLoading(false);
-            alert(`✅ Отметки присутствия сохранены для ${updatedCount} участников.`);
+            alert(`✅ Отметки присутствия сохранены для ${updatedCount} участников.${chargedCount > 0 ? ` Списано баллов: ${chargedCount * training.price}.` : ''}`);
             closeModal('attendanceModal');
             
             // Обновляем статистику
@@ -3120,9 +3277,6 @@
                         <td>${user.balance || 0}</td>
                         <td><span class="status-badge ${statusBadge}">${user.status || 'active'}</span></td>
                         <td>
-                            <button onclick="editUser('${doc.id}')" class="btn-secondary" style="padding: 5px 10px; font-size: 12px;">
-                                <i class="fas fa-edit"></i>
-                            </button>
                             <button onclick="deleteUser('${doc.id}')" class="btn-danger" style="padding: 5px 10px; font-size: 12px;">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -3139,11 +3293,6 @@
             console.error('Ошибка загрузки пользователей:', error);
             document.getElementById('usersList').innerHTML = '<p class="text-center">Ошибка загрузки</p>';
         }
-    }
-
-    // Редактирование пользователя
-    async function editUser(userId) {
-        alert('Редактирование пользователя будет реализовано в следующей версии');
     }
 
     // Удаление пользователя
@@ -3191,7 +3340,7 @@
     }
 
     // ============================================
-    // 📋 ЗАПИСЬ НА ТРЕНИРОВКИ
+    // 📋 ЗАПИСЬ НА ТРЕНИРОВКИ (БЕЗ СПИСАНИЯ)
     // ============================================
 
     // Открытие модального окна записи
@@ -3206,15 +3355,9 @@
         openModal('registerModal');
     }
 
-    // Подтверждение записи
+    // Подтверждение записи (без списания баллов)
     async function confirmRegistration() {
         if (!selectedTrainingId || !userData || !db) return;
-        
-        if (userData.balance < selectedTrainingPrice) {
-            alert(`❌ Недостаточно баллов! Нужно: ${selectedTrainingPrice}, у вас: ${userData.balance}`);
-            closeModal('registerModal');
-            return;
-        }
         
         try {
             showLoading(true);
@@ -3259,27 +3402,18 @@
                 throw new Error('Нет свободных мест');
             }
             
-            // Обновляем баланс пользователя
-            await db.collection('users').doc(currentUser.uid).update({
-                balance: firebase.firestore.FieldValue.increment(-selectedTrainingPrice)
+            // Создание записи БЕЗ списания баллов
+            await db.collection('registrations').add({
+                userId: currentUser.uid,
+                trainingId: selectedTrainingId,
+                willAttend: true,
+                attended: false,
+                charged: false, // Баллы еще не списаны
+                registeredAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             
-            // Начисляем тренеру (если есть)
+            // Уведомление для тренера
             if (training.trainerId) {
-                await db.collection('users').doc(training.trainerId).update({
-                    balance: firebase.firestore.FieldValue.increment(selectedTrainingPrice)
-                });
-                
-                // Транзакция для тренера
-                await db.collection('transactions').add({
-                    userId: training.trainerId,
-                    amount: selectedTrainingPrice,
-                    type: 'credit',
-                    description: `Оплата тренировки: ${training.title} (от ${userData.name || userData.email})`,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                // Уведомление для тренера
                 await createNotification(training.trainerId, 'registration_confirmed', {
                     message: `${userData.name || userData.email} записался на вашу тренировку "${training.title}"`,
                     trainingId: selectedTrainingId,
@@ -3288,38 +3422,15 @@
                 });
             }
             
-            // Транзакция для пользователя
-            await db.collection('transactions').add({
-                userId: currentUser.uid,
-                trainingId: selectedTrainingId,
-                amount: selectedTrainingPrice,
-                type: 'debit',
-                description: `Запись на тренировку: ${training.title}`,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
-            // Создание записи
-            await db.collection('registrations').add({
-                userId: currentUser.uid,
-                trainingId: selectedTrainingId,
-                willAttend: true,
-                attended: false,
-                charged: true,
-                registeredAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
             showLoading(false);
-            alert('✅ Вы успешно записались на тренировку!');
+            alert('✅ Вы успешно записались на тренировку! Баллы будут списаны после подтверждения присутствия тренером.');
             closeModal('registerModal');
             
             // Уведомление для пользователя
             await createNotification(currentUser.uid, 'registration_confirmed', {
-                message: `Вы записаны на тренировку "${training.title}"`,
+                message: `Вы записаны на тренировку "${training.title}". Баллы будут списаны после подтверждения присутствия.`,
                 trainingId: selectedTrainingId
             });
-            
-            // Обновляем данные пользователя
-            await loadUserData();
             
             // Обновляем интерфейс
             loadTrainings();
@@ -3398,14 +3509,10 @@
     }
 
     // Дополнительные функции тренера
-    async function editTraining(trainingId) {
-        alert('Редактирование тренировки будет реализовано в следующей версии');
-    }
-
     async function cancelTraining(trainingId) {
         if (!db) return;
         
-        if (!confirm('Отменить эту тренировку? Все записавшиеся получат уведомление и возврат баллов.')) {
+        if (!confirm('Отменить эту тренировку? Все записавшиеся получат уведомление.')) {
             return;
         }
         
@@ -3424,46 +3531,19 @@
             // Находим всех записавшихся пользователей
             const registrationsSnapshot = await db.collection('registrations')
                 .where('trainingId', '==', trainingId)
-                .where('charged', '==', true)
                 .get();
-            
-            const batch = db.batch();
-            
-            for (const doc of registrationsSnapshot.docs) {
-                const reg = doc.data();
-                
-                // Возвращаем баллы пользователю
-                const userRef = db.collection('users').doc(reg.userId);
-                batch.update(userRef, {
-                    balance: firebase.firestore.FieldValue.increment(training.price || 0)
-                });
-                
-                // Создаем транзакцию возврата
-                const transRef = db.collection('transactions').doc();
-                batch.set(transRef, {
-                    userId: reg.userId,
-                    amount: training.price || 0,
-                    type: 'credit',
-                    description: `Возврат за отмененную тренировку: ${training.title}`,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-            
-            if (!registrationsSnapshot.empty) {
-                await batch.commit();
-            }
             
             // Создаем уведомления
             for (const doc of registrationsSnapshot.docs) {
                 const reg = doc.data();
                 await createNotification(reg.userId, 'training_cancelled', {
-                    message: `Тренировка "${training.title}" отменена. ${training.price || 0} баллов возвращены на ваш счет.`,
+                    message: `Тренировка "${training.title}" отменена.`,
                     trainingId: trainingId
                 });
             }
             
             showLoading(false);
-            alert('✅ Тренировка отменена. Баллы возвращены участникам.');
+            alert('✅ Тренировка отменена.');
             
             // Обновляем интерфейс
             loadTrainings();
@@ -3508,14 +3588,6 @@
             showLoading(false);
             alert('❌ Ошибка: ' + error.message);
         }
-    }
-
-    function openRateUsersModal() {
-        alert('Оценка участников будет реализована в следующей версии');
-    }
-
-    function openUserStatsModal() {
-        alert('Статистика пользователей будет реализована в следующей версии');
     }
 
     // Инициализация при загрузке
