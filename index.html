@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FitBook - Бронирование тренировок</title>
+    <title>FYSM - Бронирование тренировок</title>
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -1075,21 +1075,6 @@
     // FITBOOK - ПОЛНОЕ ПРИЛОЖЕНИЕ
     // ============================================
 
-    // Конфигурация Firebase
-    const firebaseConfig = {
-        apiKey: "AIzaSyD5gplXXpP69H0f0WDQehy4jLOOTnw2rZQ",
-        authDomain: "fysm-2d26a.firebaseapp.com",
-        projectId: "fysm-2d26a",
-        storageBucket: "fysm-2d26a.firebasestorage.app",
-        messagingSenderId: "1013209595020",
-        appId: "1:1013209595020:web:5057a63c94dbf29aa4cfa9"
-    };
-
-    // Инициализация Firebase
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-
     // Глобальные переменные
     let currentUser = null;
     let userData = null;
@@ -1099,6 +1084,10 @@
     let trainingsLastDoc = null;
     let trainingsHasMore = true;
     const TRAININGS_PER_PAGE = 10;
+
+    // Объявляем переменные для Firebase (они будут инициализированы позже)
+    let auth = null;
+    let db = null;
 
     // ============================================
     // 🔐 ОСНОВНЫЕ ФУНКЦИИ АВТОРИЗАЦИИ
@@ -1280,7 +1269,7 @@
             const container = document.getElementById('trainingsList');
             
             if (!loadMore) {
-                container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+                container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
                 trainingsLastDoc = null;
                 trainingsHasMore = true;
             }
@@ -3400,37 +3389,55 @@
         });
     }
 
-    // Проверка аутентификации
-    auth.onAuthStateChanged(async (user) => {
-        if (user) {
-            currentUser = user;
-            await loadUserData();
-            await initNotifications();
-            
-            showScreen('schedule');
-            
-            // Показываем приветствие
-            setTimeout(() => {
-                showNotificationToast({
-                    type: 'system',
-                    message: `Добро пожаловать, ${userData?.name || 'Пользователь'}!`,
-                    createdAt: new Date()
-                });
-            }, 1000);
-        } else {
-            currentUser = null;
-            userData = null;
-            showScreen('login');
-            document.querySelector('.bottom-nav').style.display = 'none';
-        }
-    });
+    // Инициализация Firebase и приложения
+    function initApp() {
+        // Конфигурация Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyD5gplXXpP69H0f0WDQehy4jLOOTnw2rZQ",
+            authDomain: "fysm-2d26a.firebaseapp.com",
+            projectId: "fysm-2d26a",
+            storageBucket: "fysm-2d26a.firebasestorage.app",
+            messagingSenderId: "1013209595020",
+            appId: "1:1013209595020:web:5057a63c94dbf29aa4cfa9"
+        };
+
+        // Инициализация Firebase
+        firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.firestore();
+
+        console.log('Firebase инициализирован');
+
+        // Проверка аутентификации
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                await loadUserData();
+                await initNotifications();
+                
+                showScreen('schedule');
+                
+                // Показываем приветствие
+                setTimeout(() => {
+                    showNotificationToast({
+                        type: 'system',
+                        message: `Добро пожаловать, ${userData?.name || 'Пользователь'}!`,
+                        createdAt: new Date()
+                    });
+                }, 1000);
+            } else {
+                currentUser = null;
+                userData = null;
+                showScreen('login');
+                document.querySelector('.bottom-nav').style.display = 'none';
+            }
+        });
+    }
 
     // Инициализация при загрузке
     document.addEventListener('DOMContentLoaded', function() {
         initNavigation();
-        
-        // Добавляем обработчики для кнопок входа/выхода
-        document.getElementById('logoutBtn').addEventListener('click', logout);
+        initApp();
         
         console.log('FitBook инициализирован');
     });
