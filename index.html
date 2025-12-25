@@ -1859,58 +1859,60 @@ async function checkNotifications() {
     }
 
     // Показ тоста
-    function showNotificationToast(notification) {
-        const toast = document.createElement('div');
-        toast.className = 'notification-toast';
-        toast.style.cssText = `
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            z-index: 10000;
-            min-width: 300px;
-            max-width: 400px;
-            border-left: 4px solid ${getNotificationColor(notification.type)};
-            animation: slideIn 0.3s ease;
-        `;
-        
-        toast.innerHTML = `
-            <div style="display: flex; align-items: flex-start; gap: 10px;">
-                <div style="color: ${getNotificationColor(notification.type)}; font-size: 20px;">
-                    <i class="${getNotificationIcon(notification.type)}"></i>
-                </div>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; margin-bottom: 5px;">${getNotificationTitle(notification.type)}</div>
-                    <div style="font-size: 0.9em; color: #666;">${notification.message || getNotificationMessage(notification)}</div>
-                </div>
-                <button onclick="this.parentElement.parentElement.remove()" style="
-                    background: none;
-                    border: none;
-                    color: #999;
-                    cursor: pointer;
-                    padding: 0;
-                    font-size: 18px;
-                ">×</button>
+   function showNotificationToast(notification) {
+    console.log('Показываем toast уведомление:', notification);
+    
+    const toast = document.createElement('div');
+    toast.className = 'notification-toast';
+    toast.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        z-index: 10000;
+        min-width: 300px;
+        max-width: 400px;
+        border-left: 4px solid ${getNotificationColor(notification.type)};
+        animation: slideIn 0.3s ease;
+    `;
+    
+    toast.innerHTML = `
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <div style="color: ${getNotificationColor(notification.type)}; font-size: 20px;">
+                <i class="${getNotificationIcon(notification.type)}"></i>
             </div>
-        `;
-        
-        document.body.appendChild(toast);
-        
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => {
-                    if (toast.parentNode) {
-                        document.body.removeChild(toast);
-                    }
-                }, 300);
-            }
-        }, 5000);
-    }
-
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 5px;">${getNotificationTitle(notification.type)}</div>
+                <div style="font-size: 0.9em; color: #666;">${notification.message || getNotificationMessage(notification)}</div>
+                <div style="font-size: 0.8em; color: #999; margin-top: 5px;">${new Date().toLocaleTimeString()}</div>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" style="
+                background: none;
+                border: none;
+                color: #999;
+                cursor: pointer;
+                padding: 0;
+                font-size: 18px;
+            ">×</button>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    document.body.removeChild(toast);
+                }
+            }, 300);
+        }
+    }, 5000);
+}
     // Обновление бэйджа
     async function updateNotificationBadge() {
         try {
