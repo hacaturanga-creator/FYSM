@@ -751,20 +751,24 @@
 
         /* Звезды для рейтинга */
         .rating-stars {
-            display: inline-flex;
+            display: flex;
             direction: row;
             font-size: 24px;
-            cursor: pointer;
+            gap: 5px;
+            margin: 10px 0;
         }
 
-        .star {
+        .rating-stars .star {
             color: #ddd;
-            transition: color 0.2s;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 2rem;
         }
 
-        .star:hover,
-        .star.active {
+        .rating-stars .star:hover,
+        .rating-stars .star.active {
             color: gold;
+            transform: scale(1.2);
         }
 
         /* Теги статусов */
@@ -1096,6 +1100,9 @@
                                 <button onclick="openAdjustBalanceModal()" class="btn-primary">
                                     <i class="fas fa-coins"></i> Начислить баллы
                                 </button>
+                                <button onclick="openPointsModal()" class="btn-success">
+                                    <i class="fas fa-star"></i> Начислить баллы и оценку
+                                </button>
                                 <button onclick="testTrainerNotifications()" class="btn-primary" style="background: #17a2b8;">
                                     <i class="fas fa-bell"></i> Тест уведомлений
                                 </button>
@@ -1269,6 +1276,156 @@
         </div>
     </div>
 
+    <!-- Модальное окно добавления/редактирования пользователя -->
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-user-plus"></i> <span id="addUserModalTitle">Добавить пользователя</span></h3>
+            
+            <div class="form-group">
+                <label>Имя *</label>
+                <input type="text" id="addUserName" placeholder="Введите имя">
+            </div>
+            
+            <div class="form-group">
+                <label>Email *</label>
+                <input type="email" id="addUserEmail" placeholder="Введите email">
+            </div>
+            
+            <div class="form-group">
+                <label>Телефон</label>
+                <input type="tel" id="addUserPhone" placeholder="Введите телефон">
+            </div>
+            
+            <div class="form-group">
+                <label>Роль *</label>
+                <select id="addUserRole">
+                    <option value="user">Пользователь</option>
+                    <option value="trainer">Тренер</option>
+                    <option value="admin">Администратор</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Начальный баланс *</label>
+                <input type="number" id="addUserBalance" value="100" min="0">
+            </div>
+            
+            <div class="form-group">
+                <label>Пароль <span style="color:#666; font-size:0.9em;">(оставьте пустым для автоматической генерации)</span></label>
+                <input type="text" id="addUserPassword" placeholder="Введите пароль или оставьте пустым">
+            </div>
+            
+            <div class="form-actions">
+                <button onclick="saveUser()" class="btn-primary" id="saveUserBtn">Сохранить</button>
+                <button onclick="closeModal('addUserModal')" class="btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно начисления баллов и оценок -->
+    <div id="pointsModal" class="modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-star"></i> <span id="pointsModalTitle">Начислить баллы и оценку</span></h3>
+            
+            <div class="form-group">
+                <label>Выберите пользователя *</label>
+                <select id="pointsUser">
+                    <option value="">Загрузка пользователей...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Выберите тренировку *</label>
+                <select id="pointsTraining">
+                    <option value="">Загрузка тренировок...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Количество баллов *</label>
+                <input type="number" id="pointsAmount" placeholder="100" min="0">
+            </div>
+            
+            <div class="form-group">
+                <label>Оценка (1-5) *</label>
+                <div class="rating-stars" id="ratingStars">
+                    <span class="star" data-value="1">★</span>
+                    <span class="star" data-value="2">★</span>
+                    <span class="star" data-value="3">★</span>
+                    <span class="star" data-value="4">★</span>
+                    <span class="star" data-value="5">★</span>
+                </div>
+                <input type="hidden" id="ratingValue" value="0">
+            </div>
+            
+            <div class="form-group">
+                <label>Комментарий к оценке</label>
+                <textarea id="pointsComment" placeholder="Отличная работа на тренировке!" rows="3"></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button onclick="savePointsAndRating()" class="btn-primary">Сохранить</button>
+                <button onclick="closeModal('pointsModal')" class="btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно редактирования пользователя -->
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-user-edit"></i> Редактировать пользователя</h3>
+            <input type="hidden" id="editUserId">
+            
+            <div class="form-group">
+                <label>Имя *</label>
+                <input type="text" id="editUserName" placeholder="Введите имя">
+            </div>
+            
+            <div class="form-group">
+                <label>Email *</label>
+                <input type="email" id="editUserEmail" placeholder="Введите email">
+            </div>
+            
+            <div class="form-group">
+                <label>Телефон</label>
+                <input type="tel" id="editUserPhone" placeholder="Введите телефон">
+            </div>
+            
+            <div class="form-group">
+                <label>Роль *</label>
+                <select id="editUserRole">
+                    <option value="user">Пользователь</option>
+                    <option value="trainer">Тренер</option>
+                    <option value="admin">Администратор</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Статус *</label>
+                <select id="editUserStatus">
+                    <option value="active">Активный</option>
+                    <option value="inactive">Неактивный</option>
+                    <option value="banned">Заблокирован</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Баланс *</label>
+                <input type="number" id="editUserBalance" min="0">
+            </div>
+            
+            <div class="form-group">
+                <label>Новый пароль <span style="color:#666; font-size:0.9em;">(оставьте пустым, если не нужно менять)</span></label>
+                <input type="text" id="editUserPassword" placeholder="Введите новый пароль">
+            </div>
+            
+            <div class="form-actions">
+                <button onclick="updateUser()" class="btn-primary">Сохранить изменения</button>
+                <button onclick="closeModal('editUserModal')" class="btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
     <div id="notificationsModal" class="modal">
         <div class="modal-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -1422,6 +1579,8 @@
             case 'users':
                 loadUsersList();
                 break;
+            case 'tools':
+                break; // tools таб уже загружен
             case 'drafts':
                 loadDraftTrainings();
                 break;
@@ -2684,6 +2843,90 @@
     }
 
     // ============================================
+    // ⭐ ОЦЕНКИ
+    // ============================================
+
+    // Загрузка оценок пользователя
+    async function loadMyRatings() {
+        if (!db || !currentUser) return;
+        
+        try {
+            showLoading(true);
+            const querySnapshot = await db.collection('ratings')
+                .where('userId', '==', currentUser.uid)
+                .orderBy('createdAt', 'desc')
+                .limit(50)
+                .get();
+            
+            const container = document.getElementById('ratingsList');
+            
+            if (querySnapshot.empty) {
+                container.innerHTML = '<p class="text-center">У вас еще нет оценок</p>';
+                showLoading(false);
+                return;
+            }
+            
+            const ratings = [];
+            querySnapshot.forEach(doc => {
+                const rating = doc.data();
+                rating.id = doc.id;
+                ratings.push(rating);
+            });
+            
+            // Загружаем информацию о тренировках
+            const trainingPromises = ratings.map(rating => 
+                db.collection('trainings').doc(rating.trainingId).get()
+            );
+            const trainingSnapshots = await Promise.all(trainingPromises);
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Тренировка</th>
+                            <th>Тренер</th>
+                            <th>Оценка</th>
+                            <th>Баллы</th>
+                            <th>Комментарий</th>
+                            <th>Дата</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            ratings.forEach((rating, index) => {
+                const training = trainingSnapshots[index].exists ? trainingSnapshots[index].data() : {};
+                const date = rating.createdAt?.toDate() || new Date();
+                
+                // Создаем звезды для оценки
+                let starsHtml = '';
+                for (let i = 1; i <= 5; i++) {
+                    starsHtml += `<span style="color: ${i <= rating.value ? 'gold' : '#ddd'}">★</span>`;
+                }
+                
+                html += `
+                    <tr>
+                        <td>${training.title || 'Неизвестно'}</td>
+                        <td>${rating.trainerName || 'Тренер'}</td>
+                        <td>${starsHtml} (${rating.value}/5)</td>
+                        <td style="color: #28a745; font-weight: 600;">+${rating.points || 0}</td>
+                        <td>${rating.comment || '-'}</td>
+                        <td>${date.toLocaleDateString()}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+            showLoading(false);
+        } catch (error) {
+            showLoading(false);
+            console.error('Ошибка загрузки оценок:', error);
+            document.getElementById('ratingsList').innerHTML = '<p class="text-center">Ошибка загрузки оценок</p>';
+        }
+    }
+
+    // ============================================
     // 👨‍🏫 ФУНКЦИИ ТРЕНЕРА
     // ============================================
 
@@ -3305,11 +3548,22 @@
             return;
         }
         
+        // Очищаем форму
+        document.getElementById('addUserName').value = '';
+        document.getElementById('addUserEmail').value = '';
+        document.getElementById('addUserPhone').value = '';
+        document.getElementById('addUserRole').value = 'user';
+        document.getElementById('addUserBalance').value = '100';
+        document.getElementById('addUserPassword').value = '';
+        
+        document.getElementById('addUserModalTitle').textContent = 'Добавить пользователя';
+        document.getElementById('saveUserBtn').textContent = 'Добавить';
+        
         openModal('addUserModal');
     }
 
-    // Добавление пользователя
-    async function addUser() {
+    // Сохранение пользователя (добавление)
+    async function saveUser() {
         if (!userData || (userData.role !== 'trainer' && userData.role !== 'admin')) {
             alert('Только тренер или администратор может добавлять пользователей');
             return;
@@ -3318,9 +3572,123 @@
         const name = document.getElementById('addUserName').value.trim();
         const email = document.getElementById('addUserEmail').value.trim();
         const phone = document.getElementById('addUserPhone').value.trim();
-        const balance = parseInt(document.getElementById('addUserBalance').value) || 0;
         const role = document.getElementById('addUserRole').value;
+        const balance = parseInt(document.getElementById('addUserBalance').value) || 0;
         const password = document.getElementById('addUserPassword').value;
+        
+        if (!name || !email) {
+            alert('Заполните обязательные поля: имя и email');
+            return;
+        }
+        
+        if (!validateEmail(email)) {
+            alert('Введите корректный email');
+            return;
+        }
+        
+        if (balance < 0) {
+            alert('Баланс не может быть отрицательным');
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            // Генерируем пароль, если не указан
+            let generatedPassword = password;
+            if (!generatedPassword) {
+                generatedPassword = generatePassword(8);
+            }
+            
+            // Создаем пользователя в Firebase Auth
+            const userCredential = await auth.createUserWithEmailAndPassword(email, generatedPassword);
+            const newUser = userCredential.user;
+            
+            // Создаем запись в Firestore
+            await db.collection('users').doc(newUser.uid).set({
+                name: name,
+                email: email,
+                phone: phone,
+                role: role,
+                balance: balance,
+                status: 'active',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: currentUser.uid,
+                createdByName: userData.name
+            });
+            
+            // Создаем начальную транзакцию
+            if (balance > 0) {
+                await db.collection('transactions').add({
+                    userId: newUser.uid,
+                    amount: balance,
+                    type: 'credit',
+                    description: `Начальный баланс при создании аккаунта`,
+                    createdBy: currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+            
+            showLoading(false);
+            alert(`✅ Пользователь "${name}" успешно добавлен!${!password ? `\nСгенерированный пароль: ${generatedPassword}` : ''}`);
+            closeModal('addUserModal');
+            
+            // Обновляем список пользователей
+            loadUsersList();
+            
+        } catch (error) {
+            showLoading(false);
+            console.error('Ошибка добавления пользователя:', error);
+            alert('❌ Ошибка: ' + error.message);
+        }
+    }
+
+    // Открытие окна редактирования пользователя
+    async function openEditUserModal(userId) {
+        if (!userData || (userData.role !== 'trainer' && userData.role !== 'admin')) {
+            alert('Только тренер или администратор может редактировать пользователей');
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (!userDoc.exists) {
+                throw new Error('Пользователь не найден');
+            }
+            
+            const user = userDoc.data();
+            
+            // Заполняем форму данными пользователя
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editUserName').value = user.name || '';
+            document.getElementById('editUserEmail').value = user.email || '';
+            document.getElementById('editUserPhone').value = user.phone || '';
+            document.getElementById('editUserRole').value = user.role || 'user';
+            document.getElementById('editUserStatus').value = user.status || 'active';
+            document.getElementById('editUserBalance').value = user.balance || 0;
+            document.getElementById('editUserPassword').value = '';
+            
+            showLoading(false);
+            openModal('editUserModal');
+            
+        } catch (error) {
+            showLoading(false);
+            alert('❌ Ошибка: ' + error.message);
+        }
+    }
+
+    // Обновление данных пользователя
+    async function updateUser() {
+        const userId = document.getElementById('editUserId').value;
+        const name = document.getElementById('editUserName').value.trim();
+        const email = document.getElementById('editUserEmail').value.trim();
+        const phone = document.getElementById('editUserPhone').value.trim();
+        const role = document.getElementById('editUserRole').value;
+        const status = document.getElementById('editUserStatus').value;
+        const balance = parseInt(document.getElementById('editUserBalance').value) || 0;
+        const password = document.getElementById('editUserPassword').value.trim();
         
         if (!name || !email) {
             alert('Заполните обязательные поля: имя и email');
@@ -3335,45 +3703,59 @@
         try {
             showLoading(true);
             
-            // Создаем пользователя в Firebase Auth
-            let generatedPassword = password;
-            if (!generatedPassword) {
-                generatedPassword = generatePassword();
+            // Получаем текущие данные пользователя
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (!userDoc.exists) {
+                throw new Error('Пользователь не найден');
             }
             
-            const userCredential = await auth.createUserWithEmailAndPassword(email, generatedPassword);
-            const user = userCredential.user;
-            
-            // Создаем запись в Firestore
-            await db.collection('users').doc(user.uid).set({
+            const currentUserData = userDoc.data();
+            const updates = {
                 name: name,
                 email: email,
                 phone: phone,
                 role: role,
-                balance: balance,
-                status: 'active',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                createdBy: currentUser.uid,
-                createdByName: userData.name
-            });
+                status: status,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: currentUser.uid
+            };
+            
+            // Обновляем баланс, если он изменился
+            if (balance !== currentUserData.balance) {
+                const diff = balance - currentUserData.balance;
+                updates.balance = balance;
+                
+                // Создаем транзакцию для изменения баланса
+                await db.collection('transactions').add({
+                    userId: userId,
+                    amount: Math.abs(diff),
+                    type: diff > 0 ? 'credit' : 'debit',
+                    description: diff > 0 ? 'Корректировка баланса (начисление)' : 'Корректировка баланса (списание)',
+                    createdBy: currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+            
+            // Обновляем данные в Firestore
+            await db.collection('users').doc(userId).update(updates);
+            
+            // Обновляем пароль, если указан
+            if (password) {
+                // Для обновления пароля нужно использовать Firebase Auth Admin SDK
+                // На клиенте мы не можем обновить пароль другого пользователя
+                alert('⚠️ Для смены пароля пользователя используйте консоль Firebase или свяжитесь с администратором');
+            }
             
             showLoading(false);
-            alert(`✅ Пользователь "${name}" успешно добавлен!`);
-            closeModal('addUserModal');
-            
-            // Очищаем форму
-            document.getElementById('addUserName').value = '';
-            document.getElementById('addUserEmail').value = '';
-            document.getElementById('addUserPhone').value = '';
-            document.getElementById('addUserBalance').value = '100';
-            document.getElementById('addUserPassword').value = '';
+            alert('✅ Данные пользователя успешно обновлены!');
+            closeModal('editUserModal');
             
             // Обновляем список пользователей
             loadUsersList();
             
         } catch (error) {
             showLoading(false);
-            console.error('Ошибка добавления пользователя:', error);
+            console.error('Ошибка обновления пользователя:', error);
             alert('❌ Ошибка: ' + error.message);
         }
     }
@@ -3419,7 +3801,8 @@
                 const user = doc.data();
                 const roleBadge = user.role === 'admin' ? 'status-danger' : 
                                  user.role === 'trainer' ? 'status-warning' : 'status-success';
-                const statusBadge = user.status === 'active' ? 'status-success' : 'status-danger';
+                const statusBadge = user.status === 'active' ? 'status-success' : 
+                                   user.status === 'inactive' ? 'status-warning' : 'status-danger';
                 
                 html += `
                     <tr>
@@ -3427,12 +3810,17 @@
                         <td>${user.email}</td>
                         <td>${user.phone || '-'}</td>
                         <td><span class="status-badge ${roleBadge}">${user.role}</span></td>
-                        <td>${user.balance || 0}</td>
+                        <td><strong>${user.balance || 0}</strong> баллов</td>
                         <td><span class="status-badge ${statusBadge}">${user.status || 'active'}</span></td>
                         <td>
-                            <button onclick="deleteUser('${doc.id}')" class="btn-danger" style="padding: 5px 10px; font-size: 12px;">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            <div style="display: flex; gap: 5px;">
+                                <button onclick="openEditUserModal('${doc.id}')" class="btn-warning" style="padding: 5px 10px; font-size: 12px;">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="deleteUser('${doc.id}')" class="btn-danger" style="padding: 5px 10px; font-size: 12px;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -3476,20 +3864,161 @@
         }
     }
 
-    // Валидация email
-    function validateEmail(email) {
-        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return re.test(email);
+    // Открытие модального окна начисления баллов и оценки
+    async function openPointsModal() {
+        if (!userData || (userData.role !== 'trainer' && userData.role !== 'admin')) {
+            alert('Только тренер или администратор может начислять баллы и оценки');
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            // Загружаем пользователей
+            const usersSnapshot = await db.collection('users')
+                .where('status', '==', 'active')
+                .limit(50)
+                .get();
+            
+            const userSelect = document.getElementById('pointsUser');
+            userSelect.innerHTML = '<option value="">Выберите пользователя</option>';
+            usersSnapshot.forEach(doc => {
+                const user = doc.data();
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = `${user.name || user.email}`;
+                userSelect.appendChild(option);
+            });
+            
+            // Загружаем тренировки тренера
+            let query = db.collection('trainings');
+            if (userData.role !== 'admin') {
+                query = query.where('trainerId', '==', currentUser.uid);
+            }
+            
+            const trainingsSnapshot = await query.get();
+            const trainingSelect = document.getElementById('pointsTraining');
+            trainingSelect.innerHTML = '<option value="">Выберите тренировку</option>';
+            trainingsSnapshot.forEach(doc => {
+                const training = doc.data();
+                if (training.status === 'published' || training.status === 'completed') {
+                    const date = training.date?.toDate() || new Date();
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = `${training.title} (${date.toLocaleDateString()})`;
+                    trainingSelect.appendChild(option);
+                }
+            });
+            
+            // Настраиваем звезды для рейтинга
+            const stars = document.querySelectorAll('#ratingStars .star');
+            stars.forEach(star => {
+                star.addEventListener('click', function() {
+                    const value = parseInt(this.dataset.value);
+                    document.getElementById('ratingValue').value = value;
+                    
+                    // Подсвечиваем звезды
+                    stars.forEach(s => {
+                        s.classList.toggle('active', parseInt(s.dataset.value) <= value);
+                    });
+                });
+            });
+            
+            showLoading(false);
+            document.getElementById('pointsModalTitle').textContent = 'Начислить баллы и оценку';
+            openModal('pointsModal');
+            
+        } catch (error) {
+            showLoading(false);
+            alert('Ошибка: ' + error.message);
+        }
     }
 
-    // Генерация пароля
-    function generatePassword(length = 8) {
-        const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let password = '';
-        for (let i = 0; i < length; i++) {
-            password += charset.charAt(Math.floor(Math.random() * charset.length));
+    // Сохранение баллов и оценки
+    async function savePointsAndRating() {
+        const userId = document.getElementById('pointsUser').value;
+        const trainingId = document.getElementById('pointsTraining').value;
+        const points = parseInt(document.getElementById('pointsAmount').value);
+        const rating = parseInt(document.getElementById('ratingValue').value);
+        const comment = document.getElementById('pointsComment').value.trim();
+        
+        if (!userId || !trainingId || !points || rating < 1 || rating > 5) {
+            alert('Заполните все обязательные поля (пользователь, тренировка, баллы, оценка 1-5)');
+            return;
         }
-        return password;
+        
+        try {
+            showLoading(true);
+            
+            // Получаем информацию о пользователе и тренировке
+            const [userDoc, trainingDoc] = await Promise.all([
+                db.collection('users').doc(userId).get(),
+                db.collection('trainings').doc(trainingId).get()
+            ]);
+            
+            if (!userDoc.exists || !trainingDoc.exists) {
+                throw new Error('Пользователь или тренировка не найдены');
+            }
+            
+            const user = userDoc.data();
+            const training = trainingDoc.data();
+            
+            // Создаем запись об оценке
+            await db.collection('ratings').add({
+                userId: userId,
+                trainingId: trainingId,
+                points: points,
+                value: rating,
+                comment: comment,
+                trainerId: currentUser.uid,
+                trainerName: userData.name,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // Начисляем баллы пользователю
+            await db.collection('users').doc(userId).update({
+                balance: firebase.firestore.FieldValue.increment(points)
+            });
+            
+            // Создаем транзакцию
+            await db.collection('transactions').add({
+                userId: userId,
+                amount: points,
+                type: 'credit',
+                description: `Начисление за тренировку "${training.title}" и оценку ${rating}/5`,
+                createdBy: currentUser.uid,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // Создаем уведомление для пользователя
+            await createNotification(userId, 'rating_received', {
+                message: `Вы получили оценку ${rating}/5 и ${points} баллов за тренировку "${training.title}"`,
+                trainingId: trainingId,
+                rating: rating,
+                points: points,
+                comment: comment
+            });
+            
+            showLoading(false);
+            alert(`✅ Пользователь ${user.name} получил оценку ${rating}/5 и ${points} баллов!`);
+            closeModal('pointsModal');
+            
+            // Очищаем форму
+            document.getElementById('pointsUser').value = '';
+            document.getElementById('pointsTraining').value = '';
+            document.getElementById('pointsAmount').value = '';
+            document.getElementById('ratingValue').value = '0';
+            document.getElementById('pointsComment').value = '';
+            
+            // Сбрасываем звезды
+            document.querySelectorAll('#ratingStars .star').forEach(star => {
+                star.classList.remove('active');
+            });
+            
+        } catch (error) {
+            showLoading(false);
+            alert('❌ Ошибка: ' + error.message);
+        }
     }
 
     // ============================================
@@ -3741,6 +4270,22 @@
             showLoading(false);
             alert('❌ Ошибка: ' + error.message);
         }
+    }
+
+    // Валидация email
+    function validateEmail(email) {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    }
+
+    // Генерация пароля
+    function generatePassword(length = 8) {
+        const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let password = '';
+        for (let i = 0; i < length; i++) {
+            password += charset.charAt(Math.floor(Math.random() * charset.length));
+        }
+        return password;
     }
 
     // Инициализация при загрузке
